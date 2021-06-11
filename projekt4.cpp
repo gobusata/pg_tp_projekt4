@@ -2,16 +2,22 @@
 //
 
 #include <windows.h>
+#include <windowsx.h>
 #include <gdiplus.h>
 #include <vector>
 #include <chrono>
 #include <ShObjIdl.h>
+#include <oleacc.h>
+#include <strsafe.h>
+#include <sstream>
 using namespace Gdiplus;
 
 #include "framework.h"
 #include "projekt4.h"
 #include "Triangle.h"
 #include "Robot.h"
+#include "UniversalConvexShape.h"
+#include "ProjektRectangle.h"
 
 #pragma comment(lib, "gdiplus.lib")
 
@@ -33,7 +39,6 @@ void myOnPaint(HDC&, AppState*);
 // button size
 const int BUTTON_WIDTH = 100, BUTTON_HEIGHT = 30;
 
-
 HWND m_hwnd;
 BOOL end = FALSE;
 //appplication state
@@ -42,14 +47,15 @@ class AppState
 private:   
     //gravity
     PointF gravity{ 0, 2e-5 };
+
     std::vector<Triangle> triangles;
+    std::vector<UniversalConvexShape> shapes;
     bool is_robot = false, run_script = false;
     Robot* robot = nullptr;
     int stage;
 
 public:
     //pens and brushes in basic colors
-    //Brush* brushes[5];
     std::vector<Pen*> pens;
     SolidBrush redBrush, greenBrush, blueBrush, whiteBrush;
     Pen redPen, greenPen, bluePen, whitePen;
@@ -58,15 +64,41 @@ public:
     Rect client_rect;
     //animation rect
     RectF ar;
+    HWND list_box;
+    
+    void print(RobotPosition rp, TCHAR* text)
+    {
+        TCHAR text1[27], text2[12];
+        StringCbPrintf(text1, ARRAYSIZE(text1), TEXT("(%d, %d) "), rp.pos.X, rp.pos.Y);
+        switch (rp.robotCommand)
+        {
+        case rc_stop:
+            StringCbPrintf(text2, ARRAYSIZE(text2), TEXT("stop"));
+            break;
+        case rc_do_nothing:
+            StringCbPrintf(text2, ARRAYSIZE(text2), TEXT(""));
+            break;
+        case rc_catch:
+            StringCbPrintf(text2, ARRAYSIZE(text2), TEXT("catch"));
+            break;
+        case rc_release:
+            StringCbPrintf(text2, ARRAYSIZE(text2), TEXT("drop"));
+            break;
+        }
+        StringCchCat(text1, 27, text2);
+        StringCchCopy(text, 27, text1);
+    }
 
- 
+    std::vector<RobotPosition> list_box_trajectory;
+
     AppState():
         //initialize pens and brushes
         redBrush(Color(215, 20, 20)), greenBrush(Color(20, 215, 20)), blueBrush(Color(20, 20, 215)), whiteBrush(Color(200, 200, 200)),
         redPen(&redBrush, 2), greenPen(&greenBrush, 2), bluePen(&blueBrush, 2), whitePen(&whiteBrush, 2),
         pens{ &redPen, &greenPen, &bluePen },
         //initialize rects
-        client_rect(0, 0, 500, 530), ar(10, 10, 480, 370)
+        client_rect(0, 0, 800, 530), ar(10, 10, 480, 370),
+        list_box_trajectory()
     {
         for (auto & p : pens)
         {
@@ -85,6 +117,11 @@ public:
             tri.draw(graphics, &greenPen);
         }
 
+        for (UniversalConvexShape& s : shapes)
+        {
+            s.draw(graphics, &bluePen, &blueBrush);
+        }
+
         if (is_robot) robot->draw(graphics);
 
     }
@@ -99,6 +136,12 @@ public:
             for (std::vector<Triangle>::iterator tri2 = tri + 1; tri2 != triangles.end(); tri2++)
                 tri->collision_with_figure(*tri2, dt);
         }
+
+        for (UniversalConvexShape& s : shapes)
+        {
+            s.update(dt);
+        }
+
         if (is_robot)
         {
             robot->update(dt);
@@ -117,6 +160,7 @@ public:
         triangles.push_back(Triangle(PointF(240, 150), 30, 120, { 0, 0 }, 0.0006));
         triangles.push_back(Triangle(PointF(310, 170), 30, 120, { 0, 0 }, 0.0008));
 
+        shapes.push_back(ProjektRectangle());
     }
 
     void demo2()
@@ -136,10 +180,6 @@ public:
         triangles.push_back(Triangle(PointF(250, 360), 50, 0, PointF(0.0, 0), 0));
         triangles.push_back(Triangle(PointF(265, 200), 50, 0, PointF(0.0, 0), 0));
         triangles.push_back(Triangle(PointF(233, 280), 50, 0, PointF(0.0, 0), 0));
-        /*triangles.push_back(Triangle(PointF(180, 200), 25, 0, PointF(0.0, 0), 0));
-        triangles.push_back(Triangle(PointF(230, 280), 50, 180, PointF(0.0, 0), 0));
-        triangles.push_back(Triangle(PointF(280, 200), 25, 0, PointF(0.0, 0), 0));*/
-
     }
 
     void demo4()
@@ -153,14 +193,14 @@ public:
         is_robot = true;
         robot = new Robot();
         stage = 0;
-        robot->set_postion({ 60, 60 });
+        robot->set_tPosition({ 200, 200 });
     }
 
     inline void SetRobotArm1(REAL a)
     {
         if (is_robot)
         {
-            robot->set_arms(a - 90, robot->angle2_deg);
+            robot->set_tAngle1(a - 90);
         }
     }
 
@@ -168,8 +208,21 @@ public:
     {
         if (is_robot)
         {
-            robot->set_arms(robot->angle1_deg, a - 180);
+            robot->set_tAngle2(a - 180);
         }
+    }
+
+    inline void SetRobotPosition(Point p)
+    {
+        if (this->is_robot)
+        {
+            this->robot->set_tPosition(PointF(p.X, p.Y));
+        }
+    }
+
+    inline void SetRobotTrajectory(const std::vector<RobotPosition>& trajectory)
+    {
+        this->robot->enter_trajectory(trajectory);
     }
 
     void on_catch()
@@ -264,8 +317,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
-    // TODO: Place code here.
-
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_PROJEKT4, szWindowClass, MAX_LOADSTRING);
@@ -276,10 +327,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     GdiplusStartupOutput gdioutput;
     GdiplusStartup(&token, &gdiinput, &gdioutput);
 
-
     AppState *appState = new AppState;
-    //appState->demo4();
-
 
     // Perform application initialization:
     if (!InitInstance (hInstance, nCmdShow, appState))
@@ -336,15 +384,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         
     } while (!end);
 
-
-    //while (GetMessage(&msg, nullptr, 0, 0))
-    //{
-    //    if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
-    //    {
-    //        TranslateMessage(&msg);
-    //        DispatchMessage(&msg);
-    //    }
-    //}
     
 
     delete appState;
@@ -449,6 +488,31 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
        appstate->client_rect.GetLeft() + BUTTON_WIDTH * 4, appstate->ar.GetBottom() + BUTTON_HEIGHT*2, BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_SCRIPT_STOP, hInstance, NULL);
 
+   HWND list_box_hwnd = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTBOX, TEXT("list view"), WS_CHILD | LBS_HASSTRINGS | WS_VISIBLE | WS_BORDER,
+       appstate->ar.GetRight()+20, appstate->ar.GetTop(), BUTTON_WIDTH * 2, appstate->ar.GetBottom() - appstate->ar.GetTop(),
+       m_hwnd, NULL, hInstance, NULL);
+   appstate->list_box = list_box_hwnd;
+
+   CreateWindow(WC_BUTTON, TEXT("usuñ"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+       appstate->ar.GetRight()+20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+       m_hwnd, (HMENU)ID_TRAJECTORY_DEL, hInstance, NULL);
+
+   CreateWindow(WC_BUTTON, TEXT("catch"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+       appstate->ar.GetRight() + 0.5*BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+       m_hwnd, (HMENU)ID_TRAJECTORY_CATCH, hInstance, NULL);
+
+   CreateWindow(WC_BUTTON, TEXT("drop"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+       appstate->ar.GetRight() + BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+       m_hwnd, (HMENU)ID_TRAJECTORY_REL, hInstance, NULL);
+
+   CreateWindow(WC_BUTTON, TEXT("stop"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+       appstate->ar.GetRight() + 1.5*BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+       m_hwnd, (HMENU)ID_TRAJECTORY_STOP, hInstance, NULL);
+
+   CreateWindow(WC_BUTTON, TEXT("follow"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+       appstate->ar.GetRight() + 0 * BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 1 * BUTTON_HEIGHT, BUTTON_WIDTH * 1, BUTTON_HEIGHT,
+       m_hwnd, (HMENU)ID_TRAJECTORY_LOAD, hInstance, NULL);
+
    if (!m_hwnd)
    {
       return FALSE;
@@ -521,7 +585,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 break;
             }
 
-
             case ID_SCRIPT_START:
             {
                 appstate->start_script();
@@ -533,6 +596,72 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 appstate->stop_script();
             }
             break;
+
+            case ID_TRAJECTORY_DEL:
+            {
+                LRESULT result = ListBox_GetCurSel(appstate->list_box);
+                if (result != LB_ERR)
+                {
+                    appstate->list_box_trajectory.erase(appstate->list_box_trajectory.begin() + result);
+                    ListBox_DeleteString(appstate->list_box, result);
+                }
+                else
+                {
+                    if (appstate->list_box_trajectory.size() != 0)
+                    {
+                        appstate->list_box_trajectory.erase(appstate->list_box_trajectory.end() - 1);
+                        ListBox_DeleteString(appstate->list_box, appstate->list_box_trajectory.size());
+                    }
+                    
+                }
+                break;
+            }
+            case ID_TRAJECTORY_CATCH:
+            {
+                LRESULT result = ListBox_GetCurSel(appstate->list_box);
+                if (result != LB_ERR)
+                {
+                    appstate->list_box_trajectory[result].robotCommand = rc_catch;
+                    ListBox_DeleteString(appstate->list_box, result);
+                    TCHAR text[25];
+                    appstate->print(appstate->list_box_trajectory[result], text);
+                    ListBox_InsertString(appstate->list_box, result, text);
+                }
+                break;
+            }
+
+            case ID_TRAJECTORY_STOP:
+            {
+                LRESULT result = ListBox_GetCurSel(appstate->list_box);
+                if (result != LB_ERR)
+                {
+                    appstate->list_box_trajectory[result].robotCommand = rc_stop;
+                    ListBox_DeleteString(appstate->list_box, result);
+                    TCHAR text[25];
+                    appstate->print(appstate->list_box_trajectory[result], text);
+                    ListBox_InsertString(appstate->list_box, result, text);
+                }
+                break;
+            }
+
+            case ID_TRAJECTORY_REL:
+            {
+                LRESULT result = ListBox_GetCurSel(appstate->list_box);
+                if (result != LB_ERR)
+                {
+                    appstate->list_box_trajectory[result].robotCommand = rc_release;
+                    ListBox_DeleteString(appstate->list_box, result);
+                    TCHAR text[25];
+                    appstate->print(appstate->list_box_trajectory[result], text);
+                    ListBox_InsertString(appstate->list_box, result, text);
+                }
+                break;
+            }
+
+            case ID_TRAJECTORY_LOAD:
+            {
+                appstate->SetRobotTrajectory(appstate->list_box_trajectory);
+            }
 
             default:
                 return DefWindowProc(hWnd, message, wParam, lParam);
@@ -574,11 +703,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
         LONG_PTR lptr = reinterpret_cast<LONG_PTR>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
         SetWindowLongPtr(hWnd, GWLP_USERDATA, lptr);
+        return DefWindowProc(hWnd, message, wParam, lParam);
     }
     case WM_HSCROLL:
     {
-        
-        if (LOWORD(wParam) == SB_THUMBPOSITION || LOWORD(wParam) == TB_THUMBTRACK) 
+        if (LOWORD(wParam) == SB_THUMBPOSITION || LOWORD(wParam) == TB_THUMBTRACK)
         {
             if (GetWindowLongPtr((HWND)lParam, GWLP_ID) == ID_ROBOT1)
             {
@@ -589,7 +718,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 appstate->SetRobotArm2(HIWORD(wParam));
             }
         }
-      
+        break;
+    }
+    case WM_LBUTTONDOWN:
+    {
+        Point p;
+        p.X = LOWORD(lParam);
+        p.Y = HIWORD(lParam);
+        appstate->SetRobotPosition(p);
+        break;
+    }
+    case WM_RBUTTONUP:
+    {
+        Point p;
+        p.X = LOWORD(lParam);
+        p.Y = HIWORD(lParam);
+        TCHAR text[50];
+        appstate->list_box_trajectory.push_back({ p, rc_do_nothing });
+        appstate->print({ p, rc_do_nothing }, text);
+        SendMessage(appstate->list_box, LB_ADDSTRING, 0, (LPARAM)text);
+        break;
     }
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
@@ -621,5 +769,6 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 void myOnPaint(HDC& hdc, AppState* appstate)
 {
     Graphics graphics(hdc);
+    graphics.SetSmoothingMode(SmoothingModeAntiAlias);
     appstate->draw(&graphics);
 }
