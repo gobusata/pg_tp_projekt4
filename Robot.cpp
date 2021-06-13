@@ -8,6 +8,7 @@ Robot::Robot(std::vector<Triangle>& tris, REAL arm1_length_, REAL arm2_length_, 
 	pen1.SetLineCap(LineCapRound, LineCapRound, DashCapRound);
 	pen2.SetLineCap(LineCapRound, LineCapRoundAnchor, DashCapRound);
 
+	
 	set_arms(angle1, angle2);
 	angle1 = angle1;
 	angle2 = angle2;
@@ -31,6 +32,7 @@ void Robot::catch_triangle(Triangle* tri)
 		if (Triangle::is_point_int_triangle(tri, base_pos + arm1 + arm2))
 		{
 			catched_triangle = tri;
+			//catched_triangle->vel = { 0, -0.05 };
 			catched_triangle_r = base_pos + arm1 + arm2 - tri->pos;
 		}
 		else
@@ -75,6 +77,7 @@ void Robot::update(REAL dt)
 	if (catched_triangle != nullptr)
 	{
 		catched_triangle->vel = (base_pos + arm1 + arm2 - catched_triangle->pos) * 10e-3;
+		spdlog::get("basic_logger")->info("catched_triangle_vel {} {}", catched_triangle->vel.X, catched_triangle->vel.Y);
 	}
 }
 
@@ -185,7 +188,7 @@ void Robot::follow_trajectory()
 	}
 	else
 	{	
-		if (curr_via_tpos.pos == curr_tpos->pos)
+		if (curr_via_tpos.pos == curr_tpos->pos && curr_via_tpos.robotCommand == curr_tpos->robotCommand)
 		{
 			if (curr_tpos + 1 != trajectory.end())
 			{
@@ -224,7 +227,8 @@ void Robot::catch_triangle()
 {
 	for (int i = 0; i < triangles.size(); i++)
 	{
-		this->catch_triangle(&triangles[i]);
+		if(this->catched_triangle == nullptr)
+			this->catch_triangle(&triangles[i]);
 	}
 }
 
