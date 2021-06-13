@@ -1,9 +1,9 @@
 #include "Robot.h"
 
-Robot::Robot(REAL arm1_length_, REAL arm2_length_, REAL angle1_deg_, REAL angle2_deg_) :
+Robot::Robot(std::vector<Triangle>& tris, REAL arm1_length_, REAL arm2_length_, REAL angle1_deg_, REAL angle2_deg_) :
 	arm1_length(arm1_length_), arm2_length(arm2_length_), angle1(angle1_deg_), angle2(angle2_deg_),
 	pen1(Color(100, 100, 100), arm_width), pen2(Color(70, 70, 70), arm_width),
-	base_pos(30, 30)
+	base_pos(30, 30), triangles(tris)
 {
 	pen1.SetLineCap(LineCapRound, LineCapRound, DashCapRound);
 	pen2.SetLineCap(LineCapRound, LineCapRoundAnchor, DashCapRound);
@@ -138,34 +138,38 @@ void Robot::follow_trajectory()
 {
 	if (curr_tpos->robotCommand == rc_do_nothing)
 	{
-		if (this->tpos_reached)
-		{
-			curr_tpos++;
-		}
+		if (!this->tpos_reached)
+			return;
 	}
 	else if (curr_tpos->robotCommand == rc_stop)
 	{
 		if (this->stopped)
 		{
-			curr_tpos++;
+			
 		}
+		else
+			return;
 	}
 	else if (curr_tpos->robotCommand == rc_catch)
 	{
 		if (this->stopped)
 		{
-			curr_tpos++;
+			this->catch_triangle();
 		}
+		else
+			return;
+	}
+	else if (curr_tpos->robotCommand == rc_release)
+	{
+		if (this->stopped)
+		{
+			this->release_triangle();
+		}
+		else
+			return;
 	}
 
-	if (curr_tpos != this->trajectory.cend())
-	{
-		this->set_tPosition(PointF(curr_tpos->pos.X, curr_tpos->pos.Y));
-	}
-	else
-	{
-		this->following_trajectory = false;
-	}
+
 }
 
 void Robot::enter_trajectory(const std::vector<RobotPosition>& t)
@@ -173,8 +177,21 @@ void Robot::enter_trajectory(const std::vector<RobotPosition>& t)
 	this->trajectory = t;
 	this->curr_tpos = this->trajectory.cbegin();
 	if (this->trajectory.size() != 0)
-		this->set_tPosition(PointF(curr_tpos->pos.X, curr_tpos->pos.Y));
+		this->set_tPosition(PointF(curr_tpos->pos[0], curr_tpos->pos[1]));
 	this->following_trajectory = true;
+}
+
+void Robot::catch_triangle()
+{
+	for (int i = 0; i < triangles.size(); i++)
+	{
+		this->catch_triangle(&triangles[i]);
+	}
+}
+
+void Robot::release_triangle()
+{
+	this->catched_triangle = nullptr;
 }
 
 

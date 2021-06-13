@@ -24,7 +24,7 @@ enum RobotCommand
 
 struct RobotPosition
 {
-	Point pos;
+	Vector2f pos;
 	RobotCommand robotCommand;
 };
 
@@ -42,7 +42,8 @@ public:
 	bool following_trajectory;
 	std::vector<RobotPosition> trajectory;
 	std::vector<RobotPosition>::const_iterator curr_tpos;
-
+	RobotPosition curr_via_tpos;
+	std::vector<Triangle> triangles;
 	void follow_trajectory();
 
 public:
@@ -50,7 +51,7 @@ public:
 	PointF catched_triangle_r;
 	REAL arm1_length, arm2_length;
 
-	Robot(REAL arm1_length_ = 300, REAL arm2_length_ = 300, REAL angle1_deg_ = 90, REAL angle2_deg_ = 0);
+	Robot(std::vector<Triangle>&, REAL arm1_length_ = 300, REAL arm2_length_ = 300, REAL angle1_deg_ = 90, REAL angle2_deg_ = 0);
 
 	void draw(Graphics* graphics);
 
@@ -75,6 +76,10 @@ public:
 	void enter_trajectory(const std::vector<RobotPosition>&);
 
 	PointF get_positon();
+
+	void catch_triangle();
+
+	void release_triangle();
 };
 
 

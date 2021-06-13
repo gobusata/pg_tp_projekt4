@@ -18,9 +18,6 @@ using namespace Gdiplus;
 #include "projekt4.h"
 #include "Triangle.h"
 #include "Robot.h"
-#include "UniversalConvexShape.h"
-#include "ProjektRectangle.h"
-#include "ProjektTriangle.h"
 
 #pragma comment(lib, "gdiplus.lib")
 
@@ -52,12 +49,9 @@ private:
     PointF gravity{ 0, 2e-5 };
 
     std::vector<Triangle> triangles;
-    std::vector<UniversalConvexShape> shapes;
     bool is_robot = false, run_script = false;
     Robot* robot = nullptr;
     int stage;
-    Intersection shapes_intersection;
-    std::vector<PointF> collision_points{};
 
 public:
     //pens and brushes in basic colors
@@ -74,7 +68,7 @@ public:
     void print(RobotPosition rp, TCHAR* text)
     {
         TCHAR text1[27], text2[12];
-        StringCbPrintf(text1, ARRAYSIZE(text1), TEXT("(%d, %d) "), rp.pos.X, rp.pos.Y);
+        StringCbPrintf(text1, ARRAYSIZE(text1), TEXT("(%.0f, %.0f) "), rp.pos[0], rp.pos[1]);
         switch (rp.robotCommand)
         {
         case rc_stop:
@@ -103,7 +97,7 @@ public:
         pens{ &redPen, &greenPen, &bluePen },
         //initialize rects
         client_rect(0, 0, 800, 530), ar(10, 10, 480, 370),
-        list_box_trajectory(), shapes_intersection{false}
+        list_box_trajectory()
     {
         for (auto & p : pens)
         {
@@ -125,21 +119,6 @@ public:
             tri.draw(graphics, &greenPen);
         }
 
-        for (PointF p: collision_points)
-        {
-            graphics->FillRectangle(&this->blackBrush, p.X, p.Y, 5., 5.);
-
-        }
-
-        for (UniversalConvexShape& s : shapes)
-        {
-            if (shapes_intersection.collision)
-                s.draw(graphics, &redPen, nullptr);
-            else
-                s.draw(graphics, &bluePen, nullptr);
-        }
-
-       
 
         if (is_robot) robot->draw(graphics);
 
@@ -156,37 +135,10 @@ public:
                 tri->collision_with_figure(*tri2, dt);
         }
 
-        for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
-        {
-            s->update(dt);
-            s->collisionWithRect(ar, dt);
-            if(this->collision_points.size() > 10)
-                this->collision_points.clear();
-            for (std::vector<UniversalConvexShape>::iterator i = s + 1; i != shapes.end(); i++)
-            {
-                Intersection intersection = collisionDetection(*s, *i);
-                if (intersection.collision)
-                {
-                    collisionWithMovingObjectSol(s->mass, s->inertia, s->vel, s->omega, intersection.point - s->pos,
-                        i->mass, i->inertia, i->vel, i->omega, intersection.point - i->pos);
-                    collision_points.push_back({ intersection.point[0], intersection.point[1] });
-                    spdlog::get("basic_logger")->info("collision point  ({}, {})", intersection.point[0], intersection.point[1]);
-
-                }
-                
-            }
-            
-        }
-
         if (is_robot)
         {
             robot->update(dt);
             if (run_script) script(dt);
-        }
-       
-        if (shapes.size() == 2)
-        {
-            shapes_intersection = gjkSimplex(shapes[0], shapes[1]);
         }
     }
 
@@ -194,16 +146,12 @@ public:
     {
         Triangle::gravity = gravity;
         is_robot = false;
-        /*triangles.erase(triangles.begin(), triangles.end());
+        triangles.erase(triangles.begin(), triangles.end());
         triangles.push_back(Triangle(PointF(100, 100), 30, 120, { 0, 0 }, 0.0002));
         triangles.push_back(Triangle(PointF(170, 120), 30, 120, { 0, 0 }, 0.0004));
         triangles.push_back(Triangle(PointF(240, 150), 30, 120, { 0, 0 }, 0.0006));
-        triangles.push_back(Triangle(PointF(310, 170), 30, 120, { 0, 0 }, 0.0008));*/
+        triangles.push_back(Triangle(PointF(310, 170), 30, 120, { 0, 0 }, 0.0008));
 
-        shapes.clear();
-        shapes.push_back(ProjektTriangle(200, 340, 0, { 0, -0.02 }));
-        shapes.push_back(ProjektTriangle(200, 285, 3.14 * 0, { 0, 0 }));
-        shapes.push_back(ProjektRectangle(45, 340, 3.14 * 0.23, { 0, 0 }));
     }
 
     void demo2()
@@ -234,7 +182,7 @@ public:
         triangles.push_back(Triangle(PointF(250, 360), 25, 0, PointF(0.0, 0), 0));
         
         is_robot = true;
-        robot = new Robot();
+        robot = new Robot(this->triangles);
         stage = 0;
         robot->set_tPosition({ 200, 200 });
     }
@@ -777,8 +725,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         p.X = LOWORD(lParam);
         p.Y = HIWORD(lParam);
         TCHAR text[50];
-        appstate->list_box_trajectory.push_back({ p, rc_do_nothing });
-        appstate->print({ p, rc_do_nothing }, text);
+        appstate->list_box_trajectory.push_back({ {p.X, p.Y}, rc_do_nothing });
+        appstate->print({ {p.X, p.Y}, rc_do_nothing }, text);
         SendMessage(appstate->list_box, LB_ADDSTRING, 0, (LPARAM)text);
         break;
     }
