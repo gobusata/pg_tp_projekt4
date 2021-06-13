@@ -1,9 +1,9 @@
 #include "Robot.h"
 
-Robot::Robot(REAL arm1_length_, REAL arm2_length_, REAL angle1_deg_, REAL angle2_deg_) :
+Robot::Robot(std::vector<Triangle>& tris, REAL arm1_length_, REAL arm2_length_, REAL angle1_deg_, REAL angle2_deg_) :
 	arm1_length(arm1_length_), arm2_length(arm2_length_), angle1(angle1_deg_), angle2(angle2_deg_),
 	pen1(Color(100, 100, 100), arm_width), pen2(Color(70, 70, 70), arm_width),
-	base_pos(30, 30)
+	base_pos(30, 30), triangles(tris)
 {
 	pen1.SetLineCap(LineCapRound, LineCapRound, DashCapRound);
 	pen2.SetLineCap(LineCapRound, LineCapRoundAnchor, DashCapRound);
@@ -136,36 +136,68 @@ void Robot::set_tPosition(PointF p)
 
 void Robot::follow_trajectory()
 {
-	if (curr_tpos->robotCommand == rc_do_nothing)
+	
+	switch (this->curr_via_pos.robotCommand)
 	{
+	case rc_catch:
+		if (this->stopped)
+		{
+			this->catch_triangle();
+			break;
+		}
+		else
+			return;
+	case rc_release:
+		if (this->stopped)
+		{
+			this->release_triangle();
+			break;
+		}
+		else
+			return;
+	case rc_stop:
+		if (this->stopped)
+		{
+			break;
+		}
+		else
+			return;
+	case rc_do_nothing:
 		if (this->tpos_reached)
-		{
-			curr_tpos++;
-		}
-	}
-	else if (curr_tpos->robotCommand == rc_stop)
-	{
-		if (this->stopped)
-		{
-			curr_tpos++;
-		}
-	}
-	else if (curr_tpos->robotCommand == rc_catch)
-	{
-		if (this->stopped)
-		{
-			curr_tpos++;
-		}
+			break;
+		else
+			return;
 	}
 
-	if (curr_tpos != this->trajectory.cend())
+	Vector2f dir(this->curr_via_pos.pos - this->curr_tpos->pos);
+	if (dir.norm() > 20)
 	{
-		this->set_tPosition(PointF(curr_tpos->pos.X, curr_tpos->pos.Y));
+		dir.normalize();
+		curr_via_pos.pos += 20 * dir;
+		curr_via_pos.robotCommand = rc_do_nothing;
 	}
 	else
 	{
-		this->following_trajectory = false;
+		if (curr_tpos->pos == curr_via_pos.pos)
+		{
+			if (curr_tpos + 1 != trajectory.end())
+			{
+				curr_tpos++;
+				follow_trajectory();
+			}
+			else
+			{
+				following_trajectory = false;
+			}
+		}
+		else
+		{
+			curr_via_pos = *curr_tpos;
+		}
+		
 	}
+
+		
 }
 
 void Robot::enter_trajectory(const std::vector<RobotPosition>& t)
@@ -173,8 +205,22 @@ void Robot::enter_trajectory(const std::vector<RobotPosition>& t)
 	this->trajectory = t;
 	this->curr_tpos = this->trajectory.cbegin();
 	if (this->trajectory.size() != 0)
-		this->set_tPosition(PointF(curr_tpos->pos.X, curr_tpos->pos.Y));
+		this->set_tPosition(PointF(curr_tpos->pos[0], curr_tpos->pos[1]));
 	this->following_trajectory = true;
 }
+
+void Robot::catch_triangle()
+{
+	for (int i = 0; i < triangles.size(); i++)
+	{
+		this->catch_triangle(&triangles[i]);
+	}
+}
+
+void Robot::release_triangle()
+{
+	this->catched_triangle = nullptr;
+}
+
 
 

@@ -16,8 +16,6 @@ using namespace Gdiplus;
 #include "projekt4.h"
 #include "Triangle.h"
 #include "Robot.h"
-#include "UniversalConvexShape.h"
-#include "ProjektRectangle.h"
 
 #pragma comment(lib, "gdiplus.lib")
 
@@ -49,7 +47,6 @@ private:
     PointF gravity{ 0, 2e-5 };
 
     std::vector<Triangle> triangles;
-    std::vector<UniversalConvexShape> shapes;
     bool is_robot = false, run_script = false;
     Robot* robot = nullptr;
     int stage;
@@ -69,7 +66,7 @@ public:
     void print(RobotPosition rp, TCHAR* text)
     {
         TCHAR text1[27], text2[12];
-        StringCbPrintf(text1, ARRAYSIZE(text1), TEXT("(%d, %d) "), rp.pos.X, rp.pos.Y);
+        StringCbPrintf(text1, ARRAYSIZE(text1), TEXT("(%d, %d) "), rp.pos[0], rp.pos[1]);
         switch (rp.robotCommand)
         {
         case rc_stop:
@@ -117,11 +114,6 @@ public:
             tri.draw(graphics, &greenPen);
         }
 
-        for (UniversalConvexShape& s : shapes)
-        {
-            s.draw(graphics, &bluePen, &blueBrush);
-        }
-
         if (is_robot) robot->draw(graphics);
 
     }
@@ -135,11 +127,6 @@ public:
             tri->collision_with_wall(&ar);
             for (std::vector<Triangle>::iterator tri2 = tri + 1; tri2 != triangles.end(); tri2++)
                 tri->collision_with_figure(*tri2, dt);
-        }
-
-        for (UniversalConvexShape& s : shapes)
-        {
-            s.update(dt);
         }
 
         if (is_robot)
@@ -160,7 +147,6 @@ public:
         triangles.push_back(Triangle(PointF(240, 150), 30, 120, { 0, 0 }, 0.0006));
         triangles.push_back(Triangle(PointF(310, 170), 30, 120, { 0, 0 }, 0.0008));
 
-        shapes.push_back(ProjektRectangle());
     }
 
     void demo2()
@@ -191,7 +177,7 @@ public:
         triangles.push_back(Triangle(PointF(250, 360), 25, 0, PointF(0.0, 0), 0));
         
         is_robot = true;
-        robot = new Robot();
+        robot = new Robot(triangles);
         stage = 0;
         robot->set_tPosition({ 200, 200 });
     }
@@ -734,8 +720,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         p.X = LOWORD(lParam);
         p.Y = HIWORD(lParam);
         TCHAR text[50];
-        appstate->list_box_trajectory.push_back({ p, rc_do_nothing });
-        appstate->print({ p, rc_do_nothing }, text);
+        appstate->list_box_trajectory.push_back({ {p.X, p.Y}, rc_do_nothing });
         SendMessage(appstate->list_box, LB_ADDSTRING, 0, (LPARAM)text);
         break;
     }

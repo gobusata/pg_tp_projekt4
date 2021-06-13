@@ -33,15 +33,6 @@
     <ClInclude Include="Robot.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="UniversalConvexShape.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ProjektRectangle.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="TrajectoryList.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="projekt4.cpp">
@@ -51,15 +42,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Robot.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="UniversalConvexShape.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="ProjektRectangle.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="TrajectoryList.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
