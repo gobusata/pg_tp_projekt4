@@ -66,7 +66,7 @@ public:
     void print(RobotPosition rp, TCHAR* text)
     {
         TCHAR text1[27], text2[12];
-        StringCbPrintf(text1, ARRAYSIZE(text1), TEXT("(%d, %d) "), rp.pos[0], rp.pos[1]);
+        StringCbPrintf(text1, ARRAYSIZE(text1), TEXT("(%.0f, %.0f) "), rp.pos[0], rp.pos[1]);
         switch (rp.robotCommand)
         {
         case rc_stop:
@@ -114,19 +114,50 @@ public:
             tri.draw(graphics, &greenPen);
         }
 
-        if (is_robot) robot->draw(graphics);
+        for (PointF p: collision_points)
+        {
+            graphics->FillRectangle(&this->blackBrush, p.X, p.Y, 5., 5.);
 
-    }
+        }
 
-    void update(REAL dt)
-    {
-        
+        for (UniversalConvexShape& s : shapes)
+        {
+            if (shapes_intersection.collision)
+                s.draw(graphics, &redPen, nullptr);
+            else
+                s.draw(graphics, &bluePen, nullptr);
+        }
+
+       
+
         for (std::vector<Triangle>::iterator tri = triangles.begin(); tri != triangles.end(); tri++)
         {
             tri->update(dt);
             tri->collision_with_wall(&ar);
             for (std::vector<Triangle>::iterator tri2 = tri + 1; tri2 != triangles.end(); tri2++)
                 tri->collision_with_figure(*tri2, dt);
+        }
+
+        for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
+        {
+            s->update(dt);
+            s->collisionWithRect(ar, dt);
+            if(this->collision_points.size() > 10)
+                this->collision_points.clear();
+            for (std::vector<UniversalConvexShape>::iterator i = s + 1; i != shapes.end(); i++)
+            {
+                Intersection intersection = collisionDetection(*s, *i);
+                if (intersection.collision)
+                {
+                    collisionWithMovingObjectSol(s->mass, s->inertia, s->vel, s->omega, intersection.point - s->pos,
+                        i->mass, i->inertia, i->vel, i->omega, intersection.point - i->pos);
+                    collision_points.push_back({ intersection.point[0], intersection.point[1] });
+                    spdlog::get("basic_logger")->info("collision point  ({}, {})", intersection.point[0], intersection.point[1]);
+
+                }
+                
+            }
+            
         }
 
         if (is_robot)
@@ -690,8 +721,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         LONG_PTR lptr = reinterpret_cast<LONG_PTR>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
         SetWindowLongPtr(hWnd, GWLP_USERDATA, lptr);
         return DefWindowProc(hWnd, message, wParam, lParam);
-    }
-    case WM_HSCROLL:
+        appstate->list_box_trajectory.push_back({ {p.X, p.Y}, rc_do_nothing });
     {
         if (LOWORD(wParam) == SB_THUMBPOSITION || LOWORD(wParam) == TB_THUMBTRACK)
         {
@@ -720,7 +750,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         p.X = LOWORD(lParam);
         p.Y = HIWORD(lParam);
         TCHAR text[50];
-        appstate->list_box_trajectory.push_back({ {p.X, p.Y}, rc_do_nothing });
+        appstate->list_box_trajectory.push_back({ p, rc_do_nothing });
+        appstate->print({ p, rc_do_nothing }, text);
         SendMessage(appstate->list_box, LB_ADDSTRING, 0, (LPARAM)text);
         break;
     }
