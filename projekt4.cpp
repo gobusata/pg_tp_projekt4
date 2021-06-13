@@ -184,7 +184,7 @@ public:
         is_robot = true;
         robot = new Robot(this->triangles);
         stage = 0;
-        robot->set_tPosition({ 200, 200 });
+        robot->set_tPosition(Vector2f{ 200, 200 });
     }
 
     inline void SetRobotArm1(REAL a)

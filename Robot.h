@@ -71,6 +71,8 @@ public:
 
 	void set_tPosition(PointF);
 
+	void set_tPosition(Vector2f);
+
 	Vector2f calculateAngles(PointF);
 
 	void enter_trajectory(const std::vector<RobotPosition>&);

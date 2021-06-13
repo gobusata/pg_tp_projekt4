@@ -134,14 +134,20 @@ void Robot::set_tPosition(PointF p)
 	this->set_tAngles(v1[0], v1[1]);
 }
 
+void Robot::set_tPosition(Vector2f v)
+{
+	Vector2f v1 = this->calculateAngles({ v[0], v[1] });
+	this->set_tAngles(v1[0], v1[1]);
+}
+
 void Robot::follow_trajectory()
 {
-	if (curr_tpos->robotCommand == rc_do_nothing)
+	if (curr_via_tpos.robotCommand == rc_do_nothing)
 	{
 		if (!this->tpos_reached)
 			return;
 	}
-	else if (curr_tpos->robotCommand == rc_stop)
+	else if (curr_via_tpos.robotCommand == rc_stop)
 	{
 		if (this->stopped)
 		{
@@ -150,7 +156,7 @@ void Robot::follow_trajectory()
 		else
 			return;
 	}
-	else if (curr_tpos->robotCommand == rc_catch)
+	else if (curr_via_tpos.robotCommand == rc_catch)
 	{
 		if (this->stopped)
 		{
@@ -159,7 +165,7 @@ void Robot::follow_trajectory()
 		else
 			return;
 	}
-	else if (curr_tpos->robotCommand == rc_release)
+	else if (curr_via_tpos.robotCommand == rc_release)
 	{
 		if (this->stopped)
 		{
@@ -169,15 +175,48 @@ void Robot::follow_trajectory()
 			return;
 	}
 
+	Vector2f dir = curr_tpos->pos - curr_via_tpos.pos;
+	if (dir.norm() > 20)
+	{
+		dir.normalize();
+		curr_via_tpos.pos += 20 * dir;
+		curr_via_tpos.robotCommand = rc_do_nothing;
+		set_tPosition(curr_via_tpos.pos);
+	}
+	else
+	{	
+		if (curr_via_tpos.pos == curr_tpos->pos)
+		{
+			if (curr_tpos + 1 != trajectory.end())
+			{
+				curr_tpos++;
+				follow_trajectory();
+			}
+			else
+			{
+				following_trajectory = false;
+			}
+		}
+		else
+		{
+			curr_via_tpos = *curr_tpos;
+			set_tPosition(curr_via_tpos.pos);
+		}
+	}
+
 
 }
 
 void Robot::enter_trajectory(const std::vector<RobotPosition>& t)
 {
 	this->trajectory = t;
-	this->curr_tpos = this->trajectory.cbegin();
+	
 	if (this->trajectory.size() != 0)
-		this->set_tPosition(PointF(curr_tpos->pos[0], curr_tpos->pos[1]));
+	{
+		this->curr_tpos = this->trajectory.cbegin();
+		this->curr_via_tpos = { {get_positon().X, get_positon().Y}, rc_do_nothing };
+		this->set_tPosition(get_positon());
+	}
 	this->following_trajectory = true;
 }
 
