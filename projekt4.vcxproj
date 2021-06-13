@@ -165,7 +165,6 @@
     <ClCompile Include="ProjektRectangle.cpp" />
     <ClCompile Include="ProjektTriangle.cpp" />
     <ClCompile Include="Robot.cpp" />
-    <ClCompile Include="TrajectoryList.cpp" />
     <ClCompile Include="Triangle.cpp" />
     <ClCompile Include="UniversalConvexShape.cpp" />
   </ItemGroup>

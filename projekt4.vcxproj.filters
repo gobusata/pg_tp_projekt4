@@ -62,9 +62,6 @@
     <ClCompile Include="ProjektRectangle.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="TrajectoryList.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="ProjektTriangle.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
