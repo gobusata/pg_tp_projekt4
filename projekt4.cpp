@@ -104,31 +104,25 @@ public:
 
     }
 
+
+
     void draw(Graphics* graphics)
     {
-        
+
         graphics->DrawRectangle(&bluePen, ar);
         graphics->FillRectangle(&whiteBrush, ar);
         for (auto tri : triangles)
         {
             tri.draw(graphics, &greenPen);
         }
-
-        for (PointF p: collision_points)
+        if (is_robot)
         {
-            graphics->FillRectangle(&this->blackBrush, p.X, p.Y, 5., 5.);
-
+            this->robot->draw(graphics);
         }
+    }
 
-        for (UniversalConvexShape& s : shapes)
-        {
-            if (shapes_intersection.collision)
-                s.draw(graphics, &redPen, nullptr);
-            else
-                s.draw(graphics, &bluePen, nullptr);
-        }
-
-       
+    void update(REAL dt)
+    {
 
         for (std::vector<Triangle>::iterator tri = triangles.begin(); tri != triangles.end(); tri++)
         {
@@ -138,27 +132,7 @@ public:
                 tri->collision_with_figure(*tri2, dt);
         }
 
-        for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
-        {
-            s->update(dt);
-            s->collisionWithRect(ar, dt);
-            if(this->collision_points.size() > 10)
-                this->collision_points.clear();
-            for (std::vector<UniversalConvexShape>::iterator i = s + 1; i != shapes.end(); i++)
-            {
-                Intersection intersection = collisionDetection(*s, *i);
-                if (intersection.collision)
-                {
-                    collisionWithMovingObjectSol(s->mass, s->inertia, s->vel, s->omega, intersection.point - s->pos,
-                        i->mass, i->inertia, i->vel, i->omega, intersection.point - i->pos);
-                    collision_points.push_back({ intersection.point[0], intersection.point[1] });
-                    spdlog::get("basic_logger")->info("collision point  ({}, {})", intersection.point[0], intersection.point[1]);
-
-                }
-                
-            }
-            
-        }
+ 
 
         if (is_robot)
         {
@@ -720,9 +694,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
         LONG_PTR lptr = reinterpret_cast<LONG_PTR>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
         SetWindowLongPtr(hWnd, GWLP_USERDATA, lptr);
-        return DefWindowProc(hWnd, message, wParam, lParam);
-        appstate->list_box_trajectory.push_back({ {p.X, p.Y}, rc_do_nothing });
+    }
+    case WM_HSCROLL:
     {
+
         if (LOWORD(wParam) == SB_THUMBPOSITION || LOWORD(wParam) == TB_THUMBTRACK)
         {
             if (GetWindowLongPtr((HWND)lParam, GWLP_ID) == ID_ROBOT1)
@@ -750,8 +725,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         p.X = LOWORD(lParam);
         p.Y = HIWORD(lParam);
         TCHAR text[50];
-        appstate->list_box_trajectory.push_back({ p, rc_do_nothing });
-        appstate->print({ p, rc_do_nothing }, text);
+        appstate->list_box_trajectory.push_back({ {p.X, p.Y}, rc_do_nothing });
+        appstate->print({ {p.X, p.Y}, rc_do_nothing }, text);
         SendMessage(appstate->list_box, LB_ADDSTRING, 0, (LPARAM)text);
         break;
     }
