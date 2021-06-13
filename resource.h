@@ -23,6 +23,11 @@
 #define ID_SCRIPT_STOP                  119
 #define ID_REDRAW_CLOCK                 120
 #define ID_UPDATE_CLOCK                 121
+#define ID_TRAJECTORY_DEL               122
+#define ID_TRAJECTORY_CATCH             123
+#define ID_TRAJECTORY_REL               124
+#define ID_TRAJECTORY_STOP              125
+#define ID_TRAJECTORY_LOAD              126
 #define IDR_MAINFRAME                   128
 #define IDR_MENU1                       129
 #define IDC_STATIC                      -1
@@ -35,6 +40,6 @@
 #define _APS_NEXT_RESOURCE_VALUE        131
 #define _APS_NEXT_COMMAND_VALUE         32771
 #define _APS_NEXT_CONTROL_VALUE         1000
-#define _APS_NEXT_SYMED_VALUE           122
+#define _APS_NEXT_SYMED_VALUE           127
 #endif
 #endif

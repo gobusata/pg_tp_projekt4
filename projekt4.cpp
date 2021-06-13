@@ -9,6 +9,8 @@
 #include <ShObjIdl.h>
 #include <oleacc.h>
 #include <strsafe.h>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #include <sstream>
 using namespace Gdiplus;
 
@@ -18,6 +20,7 @@ using namespace Gdiplus;
 #include "Robot.h"
 #include "UniversalConvexShape.h"
 #include "ProjektRectangle.h"
+#include "ProjektTriangle.h"
 
 #pragma comment(lib, "gdiplus.lib")
 
@@ -53,11 +56,13 @@ private:
     bool is_robot = false, run_script = false;
     Robot* robot = nullptr;
     int stage;
+    Intersection shapes_intersection;
+    std::vector<PointF> collision_points{};
 
 public:
     //pens and brushes in basic colors
     std::vector<Pen*> pens;
-    SolidBrush redBrush, greenBrush, blueBrush, whiteBrush;
+    SolidBrush redBrush, greenBrush, blueBrush, whiteBrush, blackBrush;
     Pen redPen, greenPen, bluePen, whitePen;
 
     //rects
@@ -93,17 +98,20 @@ public:
 
     AppState():
         //initialize pens and brushes
-        redBrush(Color(215, 20, 20)), greenBrush(Color(20, 215, 20)), blueBrush(Color(20, 20, 215)), whiteBrush(Color(200, 200, 200)),
+        redBrush(Color(215, 20, 20)), greenBrush(Color(20, 215, 20)), blueBrush(Color(20, 20, 215)), whiteBrush(Color(200, 200, 200)), blackBrush(Color(0, 0, 0)),
         redPen(&redBrush, 2), greenPen(&greenBrush, 2), bluePen(&blueBrush, 2), whitePen(&whiteBrush, 2),
         pens{ &redPen, &greenPen, &bluePen },
         //initialize rects
         client_rect(0, 0, 800, 530), ar(10, 10, 480, 370),
-        list_box_trajectory()
+        list_box_trajectory(), shapes_intersection{false}
     {
         for (auto & p : pens)
         {
             p->SetLineCap(LineCapRound, LineCapRound, DashCapRound);
         }
+        auto logger = spdlog::basic_logger_mt("basic_logger", "logs/basic-log.txt", true);
+        
+        
 
     }
 
@@ -117,10 +125,21 @@ public:
             tri.draw(graphics, &greenPen);
         }
 
+        for (PointF p: collision_points)
+        {
+            graphics->FillRectangle(&this->blackBrush, p.X, p.Y, 5., 5.);
+
+        }
+
         for (UniversalConvexShape& s : shapes)
         {
-            s.draw(graphics, &bluePen, &blueBrush);
+            if (shapes_intersection.collision)
+                s.draw(graphics, &redPen, nullptr);
+            else
+                s.draw(graphics, &bluePen, nullptr);
         }
+
+       
 
         if (is_robot) robot->draw(graphics);
 
@@ -137,9 +156,26 @@ public:
                 tri->collision_with_figure(*tri2, dt);
         }
 
-        for (UniversalConvexShape& s : shapes)
+        for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
         {
-            s.update(dt);
+            s->update(dt);
+            s->collisionWithRect(ar, dt);
+            if(this->collision_points.size() > 10)
+                this->collision_points.clear();
+            for (std::vector<UniversalConvexShape>::iterator i = s + 1; i != shapes.end(); i++)
+            {
+                Intersection intersection = collisionDetection(*s, *i);
+                if (intersection.collision)
+                {
+                    collisionWithMovingObjectSol(s->mass, s->inertia, s->vel, s->omega, intersection.point - s->pos,
+                        i->mass, i->inertia, i->vel, i->omega, intersection.point - i->pos);
+                    collision_points.push_back({ intersection.point[0], intersection.point[1] });
+                    spdlog::get("basic_logger")->info("collision point  ({}, {})", intersection.point[0], intersection.point[1]);
+
+                }
+                
+            }
+            
         }
 
         if (is_robot)
@@ -148,19 +184,26 @@ public:
             if (run_script) script(dt);
         }
        
+        if (shapes.size() == 2)
+        {
+            shapes_intersection = gjkSimplex(shapes[0], shapes[1]);
+        }
     }
 
     void demo1()
     {
         Triangle::gravity = gravity;
         is_robot = false;
-        triangles.erase(triangles.begin(), triangles.end());
+        /*triangles.erase(triangles.begin(), triangles.end());
         triangles.push_back(Triangle(PointF(100, 100), 30, 120, { 0, 0 }, 0.0002));
         triangles.push_back(Triangle(PointF(170, 120), 30, 120, { 0, 0 }, 0.0004));
         triangles.push_back(Triangle(PointF(240, 150), 30, 120, { 0, 0 }, 0.0006));
-        triangles.push_back(Triangle(PointF(310, 170), 30, 120, { 0, 0 }, 0.0008));
+        triangles.push_back(Triangle(PointF(310, 170), 30, 120, { 0, 0 }, 0.0008));*/
 
-        shapes.push_back(ProjektRectangle());
+        shapes.clear();
+        shapes.push_back(ProjektTriangle(200, 340, 0, { 0, -0.02 }));
+        shapes.push_back(ProjektTriangle(200, 285, 3.14 * 0, { 0, 0 }));
+        shapes.push_back(ProjektRectangle(45, 340, 3.14 * 0.23, { 0, 0 }));
     }
 
     void demo2()
