@@ -170,7 +170,7 @@ void Robot::follow_trajectory()
 	}
 	else if (curr_via_tpos.robotCommand == rc_release)
 	{
-		if (curr_tpos->pos == curr_via_pos.pos)
+		if (curr_tpos->pos == curr_via_tpos.pos)
 		{
 			this->release_triangle();
 		}
@@ -221,19 +221,6 @@ void Robot::enter_trajectory(const std::vector<RobotPosition>& t)
 		this->set_tPosition(get_positon());
 	}
 	this->following_trajectory = true;
-}
-
-void Robot::catch_triangle()
-{
-	for (int i = 0; i < triangles.size(); i++)
-	{
-		this->catch_triangle(&triangles[i]);
-	}
-}
-
-void Robot::release_triangle()
-{
-	this->catched_triangle = nullptr;
 }
 
 void Robot::catch_triangle()
