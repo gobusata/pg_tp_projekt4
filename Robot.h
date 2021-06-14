@@ -5,7 +5,8 @@
 #include <cmath>
 #include <Eigen/dense>
 #include <vector>
-
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #include "Triangle.h"
 
 
@@ -36,15 +37,14 @@ public:
 	PointF base_pos, arm1, arm2;
 	float angle1, angle2, tAngle1, tAngle2;
 	float ang_vel1 = 0, ang_vel2 = 0;
-	float omega1 = 0.005, omega2 = 0.002;
+	float omega1 = 0.006, omega2 = 0.006;
 	float dzeta1 = 0.6, dzeta2 = 0.6;
 	bool stopped, tpos_reached;
 	bool following_trajectory;
 	std::vector<RobotPosition> trajectory;
 	std::vector<RobotPosition>::const_iterator curr_tpos;
-	RobotPosition curr_via_pos;
+	RobotPosition curr_via_tpos;
 	std::vector<Triangle>& triangles;
-
 	void follow_trajectory();
 
 public:
@@ -71,6 +71,8 @@ public:
 	void set_postion(PointF p);
 
 	void set_tPosition(PointF);
+
+	void set_tPosition(Vector2f);
 
 	Vector2f calculateAngles(PointF);
 

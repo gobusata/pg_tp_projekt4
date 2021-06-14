@@ -9,6 +9,8 @@
 #include <ShObjIdl.h>
 #include <oleacc.h>
 #include <strsafe.h>
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #include <sstream>
 using namespace Gdiplus;
 
@@ -50,11 +52,12 @@ private:
     bool is_robot = false, run_script = false;
     Robot* robot = nullptr;
     int stage;
+    std::vector<RobotPosition> predefined_trajectory;
 
 public:
     //pens and brushes in basic colors
     std::vector<Pen*> pens;
-    SolidBrush redBrush, greenBrush, blueBrush, whiteBrush;
+    SolidBrush redBrush, greenBrush, blueBrush, whiteBrush, blackBrush;
     Pen redPen, greenPen, bluePen, whitePen;
 
     //rects
@@ -90,18 +93,28 @@ public:
 
     AppState():
         //initialize pens and brushes
-        redBrush(Color(215, 20, 20)), greenBrush(Color(20, 215, 20)), blueBrush(Color(20, 20, 215)), whiteBrush(Color(200, 200, 200)),
+        redBrush(Color(215, 20, 20)), greenBrush(Color(20, 215, 20)), blueBrush(Color(20, 20, 215)), whiteBrush(Color(200, 200, 200)), blackBrush(Color(0, 0, 0)),
         redPen(&redBrush, 2), greenPen(&greenBrush, 2), bluePen(&blueBrush, 2), whitePen(&whiteBrush, 2),
         pens{ &redPen, &greenPen, &bluePen },
         //initialize rects
         client_rect(0, 0, 800, 530), ar(10, 10, 480, 370),
-        list_box_trajectory()
+        list_box_trajectory(), triangles()
     {
         for (auto & p : pens)
         {
             p->SetLineCap(LineCapRound, LineCapRound, DashCapRound);
         }
-
+        auto logger = spdlog::basic_logger_mt("basic_logger", "logs/basic-log.txt", true);
+        
+        
+        this->predefined_trajectory = { 
+            { {60, 60}, rc_stop}, { { 50, 360 }, rc_catch }, { { 200, 200 }, rc_do_nothing },
+            { { 400, 360 }, rc_do_nothing}, { { 400, 360 }, rc_release }, { {200, 200}, rc_do_nothing },
+            { {250, 360}, rc_catch }, { { 250, 200 }, rc_do_nothing }, { { 350, 360 }, rc_do_nothing},
+            { { 350, 360 }, rc_release }, { {200, 200}, rc_do_nothing }, { { 150, 340 }, rc_catch },
+            { { 200, 200 }, rc_do_nothing }, { { 375, 280 }, rc_do_nothing }, { { 375, 305 }, rc_release }
+        };
+       
     }
 
 
@@ -115,10 +128,10 @@ public:
         {
             tri.draw(graphics, &greenPen);
         }
-        if (is_robot)
-        {
-            this->robot->draw(graphics);
-        }
+
+
+        if (is_robot) robot->draw(graphics);
+
     }
 
     void update(REAL dt)
@@ -132,14 +145,10 @@ public:
                 tri->collision_with_figure(*tri2, dt);
         }
 
- 
-
         if (is_robot)
         {
             robot->update(dt);
-            if (run_script) script(dt);
         }
-       
     }
 
     void demo1()
@@ -183,8 +192,8 @@ public:
         
         is_robot = true;
         robot = new Robot(triangles);
-        stage = 0;
-        robot->set_tPosition({ 200, 200 });
+        robot->set_tPosition(Vector2f{ 200, 200 });
+        robot->set_postion({ 200, 200 });
     }
 
     inline void SetRobotArm1(REAL a)
@@ -201,6 +210,18 @@ public:
         {
             robot->set_tAngle2(a - 180);
         }
+    }
+
+    inline void SetRobotArmOmega1(float val)
+    {
+        if (is_robot)
+            robot->omega1 = val;
+    }
+    
+    inline void SetRobotArmOmega2(float val)
+    {
+        if (is_robot)
+            robot->omega2 = val;
     }
 
     inline void SetRobotPosition(Point p)
@@ -222,10 +243,11 @@ public:
         {
             if (robot->catched_triangle == nullptr)
             {
-                for (int i = 0; i < triangles.size(); i++)
+               /* for (int i = 0; i < triangles.size(); i++)
                 {
                     robot->catch_triangle(&triangles[i]);
-                }
+                }*/
+                robot->catch_triangle();
             }
             else
             {
@@ -237,56 +259,13 @@ public:
     
     void start_script()
     {
-        run_script = true;
+        this->SetRobotTrajectory(this->predefined_trajectory);
 
     }
 
     void stop_script()
     {
-        run_script = false;
-    }
-
-    void script(REAL dt)
-    {
-       
-
-        std::vector<PointF> t{ {60, 60}, {50, 360}, {200, 200}, {400, 360}, {400, 360},
-             {200, 200}, {250, 360}, {250, 200}, {350, 360}, {350, 360},
-             {200, 200}, {150, 340}, {200, 200}, {375, 280}, {375, 300}, {375, 305}, {375, 310},
-            {200, 200}
-
-        };
-        std::vector<int> t2{ 1, 6, 11, 4, 9, 16 };
-        static REAL t1_ms, t2_ms;
-        PointF dest, start;
-        if (is_robot && run_script)
-        {
-            if (stage == 0)
-            {
-                stage = 1;
-                t1_ms = t2_ms = 2000;
-            }
-
-            if (stage < t.size())
-            {
-                if (t1_ms > 0)
-                {
-                    t1_ms -= dt;
-                    robot->set_postion(t[stage] + (t[stage - 1] - t[stage]) * (t1_ms / t2_ms));
-                }
-                else
-                {
-                    for (auto i : t2)
-                    {
-                        if (stage == i) on_catch();
-                    }
-                    stage++;
-                    t1_ms = t2_ms;
-                }
-            }
-           
-  
-        }
+        this->robot->following_trajectory = false;
     }
 
     inline void follow_line(PointF start, PointF dest, float & t1_ms, float t2_ms, int & stage, float dt)
@@ -455,16 +434,16 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
        appstate->client_rect.GetLeft(), appstate->ar.GetBottom() + BUTTON_HEIGHT, 2 * BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_ROBOT1, hInstance, NULL);
 
-   SendMessage(hwnd, TBM_SETRANGE, TRUE, MAKELPARAM(0, 180));
-   SendMessage(hwnd, TBM_SETPOS, TRUE, 45);
+   SendMessage(hwnd, TBM_SETRANGE, TRUE, MAKELPARAM(20, 120));
+   SendMessage(hwnd, TBM_SETPOS, TRUE, 60);
    SendMessage(hwnd, TBM_SETTICFREQ, 10, 0);
 
    hwnd = CreateWindowEx(NULL, TRACKBAR_CLASS, TEXT("robot control 2"), WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS,
        appstate->client_rect.GetLeft() + 2*BUTTON_WIDTH, appstate->ar.GetBottom() + BUTTON_HEIGHT, 2 * BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_ROBOT2, hInstance, NULL);
 
-   SendMessage(hwnd, TBM_SETRANGE, TRUE, MAKELPARAM(0, 360));
-   SendMessage(hwnd, TBM_SETPOS, TRUE, 315);
+   SendMessage(hwnd, TBM_SETRANGE, TRUE, MAKELPARAM(20, 120));
+   SendMessage(hwnd, TBM_SETPOS, TRUE, 60);
    SendMessage(hwnd, TBM_SETTICFREQ, 10, 0);
 
    CreateWindow(WC_BUTTON, TEXT("catch"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
@@ -610,42 +589,39 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case ID_TRAJECTORY_CATCH:
             {
                 LRESULT result = ListBox_GetCurSel(appstate->list_box);
-                if (result != LB_ERR)
-                {
-                    appstate->list_box_trajectory[result].robotCommand = rc_catch;
-                    ListBox_DeleteString(appstate->list_box, result);
-                    TCHAR text[25];
-                    appstate->print(appstate->list_box_trajectory[result], text);
-                    ListBox_InsertString(appstate->list_box, result, text);
-                }
+                if (result == LB_ERR == appstate->list_box_trajectory.size() > 0)
+                    result = appstate->list_box_trajectory.size() - 1;
+                appstate->list_box_trajectory[result].robotCommand = rc_catch;
+                ListBox_DeleteString(appstate->list_box, result);
+                TCHAR text[25];
+                appstate->print(appstate->list_box_trajectory[result], text);
+                ListBox_InsertString(appstate->list_box, result, text);
                 break;
             }
 
             case ID_TRAJECTORY_STOP:
             {
                 LRESULT result = ListBox_GetCurSel(appstate->list_box);
-                if (result != LB_ERR)
-                {
-                    appstate->list_box_trajectory[result].robotCommand = rc_stop;
-                    ListBox_DeleteString(appstate->list_box, result);
-                    TCHAR text[25];
-                    appstate->print(appstate->list_box_trajectory[result], text);
-                    ListBox_InsertString(appstate->list_box, result, text);
-                }
+                if (result == LB_ERR == appstate->list_box_trajectory.size() > 0)
+                    result = appstate->list_box_trajectory.size() - 1;
+                appstate->list_box_trajectory[result].robotCommand = rc_stop;
+                ListBox_DeleteString(appstate->list_box, result);
+                TCHAR text[25];
+                appstate->print(appstate->list_box_trajectory[result], text);
+                ListBox_InsertString(appstate->list_box, result, text);
                 break;
             }
 
             case ID_TRAJECTORY_REL:
             {
                 LRESULT result = ListBox_GetCurSel(appstate->list_box);
-                if (result != LB_ERR)
-                {
-                    appstate->list_box_trajectory[result].robotCommand = rc_release;
-                    ListBox_DeleteString(appstate->list_box, result);
-                    TCHAR text[25];
-                    appstate->print(appstate->list_box_trajectory[result], text);
-                    ListBox_InsertString(appstate->list_box, result, text);
-                }
+                if (result == LB_ERR == appstate->list_box_trajectory.size() > 0)
+                    result = appstate->list_box_trajectory.size() - 1;
+                appstate->list_box_trajectory[result].robotCommand = rc_release;
+                ListBox_DeleteString(appstate->list_box, result);
+                TCHAR text[25];
+                appstate->print(appstate->list_box_trajectory[result], text);
+                ListBox_InsertString(appstate->list_box, result, text);
                 break;
             }
 
@@ -702,11 +678,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             if (GetWindowLongPtr((HWND)lParam, GWLP_ID) == ID_ROBOT1)
             {
-                appstate->SetRobotArm1(HIWORD(wParam));
+                appstate->SetRobotArmOmega1(HIWORD(wParam) / 1e4);
             }
             else if (GetWindowLongPtr((HWND)lParam, GWLP_ID) == ID_ROBOT2)
             {
-                appstate->SetRobotArm2(HIWORD(wParam));
+                appstate->SetRobotArmOmega2(HIWORD(wParam) / 1e4);
             }
         }
         break;
@@ -716,7 +692,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         Point p;
         p.X = LOWORD(lParam);
         p.Y = HIWORD(lParam);
-        appstate->SetRobotPosition(p);
+        if (appstate->ar.Contains({ (REAL)p.X, (REAL)p.Y }))
+            appstate->SetRobotTrajectory({ {{p.X, p.Y}, rc_stop} });
         break;
     }
     case WM_RBUTTONUP:
@@ -724,10 +701,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         Point p;
         p.X = LOWORD(lParam);
         p.Y = HIWORD(lParam);
-        TCHAR text[50];
-        appstate->list_box_trajectory.push_back({ {p.X, p.Y}, rc_do_nothing });
-        appstate->print({ {p.X, p.Y}, rc_do_nothing }, text);
-        SendMessage(appstate->list_box, LB_ADDSTRING, 0, (LPARAM)text);
+        if (appstate->ar.Contains({ (REAL)p.X, (REAL)p.Y }))
+        {
+            TCHAR text[50];
+            appstate->list_box_trajectory.push_back({ {p.X, p.Y}, rc_do_nothing });
+            appstate->print({ {p.X, p.Y}, rc_do_nothing }, text);
+            SendMessage(appstate->list_box, LB_ADDSTRING, 0, (LPARAM)text);
+        }
         break;
     }
     default:
