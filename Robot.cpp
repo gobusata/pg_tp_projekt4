@@ -170,7 +170,7 @@ void Robot::follow_trajectory()
 	}
 	else if (curr_via_tpos.robotCommand == rc_release)
 	{
-		if (curr_tpos->pos == curr_via_tpos.pos)
+		if (this->stopped)
 		{
 			this->release_triangle();
 		}
@@ -236,6 +236,5 @@ void Robot::release_triangle()
 {
 	this->catched_triangle = nullptr;
 }
-
 
 
