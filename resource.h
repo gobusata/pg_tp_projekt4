@@ -28,7 +28,9 @@
 #define ID_TRAJECTORY_REL               124
 #define ID_TRAJECTORY_STOP              125
 #define ID_TRAJECTORY_LOAD              126
+#define ID_TRAJECTORY_SAVE              127
 #define IDR_MAINFRAME                   128
+#define ID_TRAJECTORY_READ_FROM_FILE    128
 #define IDR_MENU1                       129
 #define IDC_STATIC                      -1
 
@@ -40,6 +42,6 @@
 #define _APS_NEXT_RESOURCE_VALUE        131
 #define _APS_NEXT_COMMAND_VALUE         32771
 #define _APS_NEXT_CONTROL_VALUE         1000
-#define _APS_NEXT_SYMED_VALUE           127
+#define _APS_NEXT_SYMED_VALUE           129
 #endif
 #endif
