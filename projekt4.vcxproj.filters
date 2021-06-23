@@ -60,5 +60,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" />
+    <None Include="projekt4.aps" />
   </ItemGroup>
 </Project>

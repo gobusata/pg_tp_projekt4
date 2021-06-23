@@ -238,3 +238,16 @@ void Robot::release_triangle()
 }
 
 
+std::ostream& operator<<(std::ostream& out, RobotPosition rp)
+{
+	out.write(reinterpret_cast<char*>(&rp), sizeof rp);
+	return out;
+}
+
+std::istream& operator>>(std::istream& in, RobotPosition& rp)
+{
+	RobotPosition trp;
+	in.read(reinterpret_cast<char*>(&trp), sizeof trp);
+	rp = trp;
+	return in;
+}

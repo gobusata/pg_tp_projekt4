@@ -5,6 +5,7 @@
 #include <cmath>
 #include <Eigen/dense>
 #include <vector>
+#include <ostream>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include "Triangle.h"
@@ -28,6 +29,9 @@ struct RobotPosition
 	Vector2f pos;
 	RobotCommand robotCommand;
 };
+
+std::ostream& operator<<(std::ostream& out, RobotPosition rp);
+std::istream& operator>>(std::istream& in, RobotPosition& rp);
 
 class Robot
 {
