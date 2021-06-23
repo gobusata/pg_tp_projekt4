@@ -12,6 +12,8 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <sstream>
+#include <fstream>
+#include <algorithm>
 using namespace Gdiplus;
 
 #include "framework.h"
@@ -273,6 +275,78 @@ public:
        
     }
 
+    void saveFile() {
+        HRESULT hr;
+        IFileSaveDialog* pFileSave;
+        IShellItem* pItem;
+        TCHAR* pFileName;
+
+        hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        hr = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_ALL, IID_IFileSaveDialog, reinterpret_cast<void**>(&pFileSave));
+        COMDLG_FILTERSPEC fileTypes[] = { {TEXT("Trajektoria"), L"*.trajectory"} };
+        hr = pFileSave->SetFileTypes(1, fileTypes);
+        hr = pFileSave->SetTitle(TEXT("Zapisz trajektoriê"));
+        hr = pFileSave->SetFileName(TEXT("1.trajectory"));
+        hr = pFileSave->Show(m_hwnd);
+        hr = pFileSave->GetResult(&pItem);
+        if (hr != S_OK)
+            return;
+        hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pFileName);
+
+        if (pFileName != nullptr)
+        {
+            std::ofstream output_file_stream;
+            output_file_stream.open(pFileName, std::ios_base::out | std::ios_base::binary);
+            std::ostream_iterator<RobotPosition> output_iterator(output_file_stream);
+            copy(list_box_trajectory.begin(), list_box_trajectory.end(), output_iterator);
+        }
+
+        CoTaskMemFree(pFileName);
+        pItem->Release();
+        pFileSave->Release();
+        CoUninitialize();
+    }
+
+    void loadFile()
+    {
+        HRESULT hr;
+        IFileOpenDialog* pFileOpen;
+        IShellItem* pItem;
+        TCHAR* filename;
+
+        hr = CoInitializeEx(nullptr, COINIT_DISABLE_OLE1DDE | COINIT_APARTMENTTHREADED);
+        hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_ALL, IID_IFileOpenDialog,
+            reinterpret_cast<void**>(&pFileOpen));
+        COMDLG_FILTERSPEC fileTypes[] = { {TEXT("Trajektoria"), L"*.trajectory"} };
+        hr = pFileOpen->SetFileTypes(1, fileTypes);
+        hr = pFileOpen->SetTitle(TEXT("Otwórz trajektoriê"));
+        hr = pFileOpen->SetFileName(TEXT("1.trajectory"));
+        hr = pFileOpen->Show(m_hwnd);
+        hr = pFileOpen->GetResult(&pItem);
+        if (hr != S_OK)
+            return;
+
+        hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &filename);
+        if (filename)
+        {
+            std::ifstream input_file_stream;
+            input_file_stream.open(filename, std::ios::out | std::ios::binary);
+            RobotPosition temp_robot_position;
+            while (input_file_stream >> temp_robot_position)
+            {
+                list_box_trajectory.push_back(temp_robot_position);
+                TCHAR text[50];
+                print(temp_robot_position, text);
+                SendMessage(list_box, LB_ADDSTRING, NULL, (LPARAM)text);
+            }
+        }
+
+        CoTaskMemFree(filename);
+        pItem->Release();
+        pFileOpen->Release();
+        CoUninitialize();
+    }
+
     ~AppState()
     {
         if (is_robot) delete robot;
@@ -414,19 +488,19 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
       CW_USEDEFAULT, CW_USEDEFAULT, window_rect.GetRight() - window_rect.GetLeft() + 10, window_rect.GetBottom() - window_rect.GetTop(),
        nullptr, nullptr, hInstance, reinterpret_cast<void*>(appstate));
 
-   CreateWindow(WC_BUTTON, TEXT("demo 1"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("demo 1"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->client_rect.GetLeft(), appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_DEMO1, hInstance, NULL);
    
-   CreateWindow(WC_BUTTON, TEXT("demo 2"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("demo 2"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->client_rect.GetLeft() + BUTTON_WIDTH, appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_DEMO2, hInstance, NULL);
    
-   CreateWindow(WC_BUTTON, TEXT("demo 3"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("demo 3"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->client_rect.GetLeft() + BUTTON_WIDTH*2, appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_DEMO3, hInstance, NULL);
    
-   CreateWindow(WC_BUTTON, TEXT("demo 4"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("demo 4"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->client_rect.GetLeft() + BUTTON_WIDTH*3, appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_DEMO4, hInstance, NULL);
 
@@ -446,15 +520,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
    SendMessage(hwnd, TBM_SETPOS, TRUE, 60);
    SendMessage(hwnd, TBM_SETTICFREQ, 10, 0);
 
-   CreateWindow(WC_BUTTON, TEXT("catch"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("catch"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->client_rect.GetLeft() + BUTTON_WIDTH * 4, appstate->ar.GetBottom() + BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_CATCH, hInstance, NULL);
 
-   CreateWindow(WC_BUTTON, TEXT("start script"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("start script"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->client_rect.GetLeft() + BUTTON_WIDTH * 3, appstate->ar.GetBottom() + BUTTON_HEIGHT*2, BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_SCRIPT_START, hInstance, NULL);
 
-   CreateWindow(WC_BUTTON, TEXT("stop script"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("stop script"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->client_rect.GetLeft() + BUTTON_WIDTH * 4, appstate->ar.GetBottom() + BUTTON_HEIGHT*2, BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_SCRIPT_STOP, hInstance, NULL);
 
@@ -463,25 +537,35 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
        m_hwnd, NULL, hInstance, NULL);
    appstate->list_box = list_box_hwnd;
 
-   CreateWindow(WC_BUTTON, TEXT("usuñ"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("usuñ"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->ar.GetRight()+20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_TRAJECTORY_DEL, hInstance, NULL);
 
-   CreateWindow(WC_BUTTON, TEXT("catch"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("catch"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->ar.GetRight() + 0.5*BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_TRAJECTORY_CATCH, hInstance, NULL);
 
-   CreateWindow(WC_BUTTON, TEXT("drop"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("drop"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->ar.GetRight() + BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_TRAJECTORY_REL, hInstance, NULL);
 
-   CreateWindow(WC_BUTTON, TEXT("stop"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("stop"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->ar.GetRight() + 1.5*BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_TRAJECTORY_STOP, hInstance, NULL);
 
-   CreateWindow(WC_BUTTON, TEXT("follow"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("follow"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
        appstate->ar.GetRight() + 0 * BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 1 * BUTTON_HEIGHT, BUTTON_WIDTH * 1, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_TRAJECTORY_LOAD, hInstance, NULL);
+
+   CreateWindow(WC_BUTTON, TEXT("Save file"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+       appstate->ar.GetRight() + 20, appstate->ar.GetBottom() +2 * BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT,
+       m_hwnd, (HMENU)ID_TRAJECTORY_SAVE, hInstance, NULL);
+
+   CreateWindow(WC_BUTTON, TEXT("Load file"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+       appstate->ar.GetRight() + BUTTON_WIDTH + 20, appstate->ar.GetBottom() +2 * BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT,
+       m_hwnd, (HMENU)ID_TRAJECTORY_READ_FROM_FILE, hInstance, NULL);
+
+
 
    if (!m_hwnd)
    {
@@ -628,6 +712,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case ID_TRAJECTORY_LOAD:
             {
                 appstate->SetRobotTrajectory(appstate->list_box_trajectory);
+                break;
+            }
+
+            case ID_TRAJECTORY_SAVE:
+            {
+                appstate->saveFile();
+                break;
+            }
+
+            case ID_TRAJECTORY_READ_FROM_FILE:
+            {
+                appstate->loadFile();
+                break;
             }
 
             default:
@@ -743,3 +840,4 @@ void myOnPaint(HDC& hdc, AppState* appstate)
     graphics.SetSmoothingMode(SmoothingModeAntiAlias);
     appstate->draw(&graphics);
 }
+
