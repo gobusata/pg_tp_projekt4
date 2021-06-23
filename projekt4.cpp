@@ -119,11 +119,9 @@ public:
        
     }
 
-
-
     void draw(Graphics* graphics)
     {
-
+        
         graphics->DrawRectangle(&bluePen, ar);
         graphics->FillRectangle(&whiteBrush, ar);
         for (auto tri : triangles)
@@ -138,7 +136,7 @@ public:
 
     void update(REAL dt)
     {
-
+        
         for (std::vector<Triangle>::iterator tri = triangles.begin(); tri != triangles.end(); tri++)
         {
             tri->update(dt);
@@ -767,10 +765,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
         LONG_PTR lptr = reinterpret_cast<LONG_PTR>(reinterpret_cast<CREATESTRUCT*>(lParam)->lpCreateParams);
         SetWindowLongPtr(hWnd, GWLP_USERDATA, lptr);
+        return DefWindowProc(hWnd, message, wParam, lParam);
     }
     case WM_HSCROLL:
     {
-
         if (LOWORD(wParam) == SB_THUMBPOSITION || LOWORD(wParam) == TB_THUMBTRACK)
         {
             if (GetWindowLongPtr((HWND)lParam, GWLP_ID) == ID_ROBOT1)
