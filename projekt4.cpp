@@ -99,7 +99,7 @@ public:
         redPen(&redBrush, 2), greenPen(&greenBrush, 2), bluePen(&blueBrush, 2), whitePen(&whiteBrush, 2),
         pens{ &redPen, &greenPen, &bluePen },
         //initialize rects
-        client_rect(0, 0, 800, 530), ar(10, 10, 480, 370),
+        client_rect(0, 0, 750, 540), ar(10, 10, 480, 370),
         list_box_trajectory(), triangles()
     {
         for (auto & p : pens)
@@ -487,23 +487,23 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
        nullptr, nullptr, hInstance, reinterpret_cast<void*>(appstate));
 
    CreateWindow(WC_BUTTON, TEXT("demo 1"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-       appstate->client_rect.GetLeft(), appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft(), appstate->ar.GetBottom() + 10, BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_DEMO1, hInstance, NULL);
    
    CreateWindow(WC_BUTTON, TEXT("demo 2"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH, appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft() + BUTTON_WIDTH, appstate->ar.GetBottom() + 10, BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_DEMO2, hInstance, NULL);
    
    CreateWindow(WC_BUTTON, TEXT("demo 3"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH*2, appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft() + BUTTON_WIDTH*2, appstate->ar.GetBottom() + 10, BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_DEMO3, hInstance, NULL);
    
    CreateWindow(WC_BUTTON, TEXT("demo 4"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH*3, appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft() + BUTTON_WIDTH*3, appstate->ar.GetBottom() + 10, BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_DEMO4, hInstance, NULL);
 
    HWND hwnd = CreateWindowEx(NULL, TRACKBAR_CLASS, TEXT("robot control 1"), WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS,
-       appstate->client_rect.GetLeft(), appstate->ar.GetBottom() + BUTTON_HEIGHT, 2 * BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft(), appstate->ar.GetBottom() + 10 + BUTTON_HEIGHT, 2 * BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_ROBOT1, hInstance, NULL);
 
    SendMessage(hwnd, TBM_SETRANGE, TRUE, MAKELPARAM(20, 120));
@@ -511,7 +511,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
    SendMessage(hwnd, TBM_SETTICFREQ, 10, 0);
 
    hwnd = CreateWindowEx(NULL, TRACKBAR_CLASS, TEXT("robot control 2"), WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS,
-       appstate->client_rect.GetLeft() + 2*BUTTON_WIDTH, appstate->ar.GetBottom() + BUTTON_HEIGHT, 2 * BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft() + 2*BUTTON_WIDTH, appstate->ar.GetBottom() + 10 + BUTTON_HEIGHT, 2 * BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_ROBOT2, hInstance, NULL);
 
    SendMessage(hwnd, TBM_SETRANGE, TRUE, MAKELPARAM(20, 120));
@@ -519,15 +519,15 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
    SendMessage(hwnd, TBM_SETTICFREQ, 10, 0);
 
    CreateWindow(WC_BUTTON, TEXT("catch"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH * 4, appstate->ar.GetBottom() + BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft() + BUTTON_WIDTH * 4, appstate->ar.GetBottom() + 10 + BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_CATCH, hInstance, NULL);
 
    CreateWindow(WC_BUTTON, TEXT("start script"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH * 3, appstate->ar.GetBottom() + BUTTON_HEIGHT*2, BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft() + BUTTON_WIDTH * 3, appstate->ar.GetBottom() + 10 + BUTTON_HEIGHT*2, BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_SCRIPT_START, hInstance, NULL);
 
    CreateWindow(WC_BUTTON, TEXT("stop script"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH * 4, appstate->ar.GetBottom() + BUTTON_HEIGHT*2, BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft() + BUTTON_WIDTH * 4, appstate->ar.GetBottom() + 10 + BUTTON_HEIGHT*2, BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_SCRIPT_STOP, hInstance, NULL);
 
    HWND list_box_hwnd = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTBOX, TEXT("list view"), WS_CHILD | LBS_HASSTRINGS | WS_VISIBLE | WS_BORDER,
@@ -536,19 +536,19 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
    appstate->list_box = list_box_hwnd;
 
    CreateWindow(WC_BUTTON, TEXT("usuñ"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-       appstate->ar.GetRight()+20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+       appstate->ar.GetRight()+20, appstate->ar.GetBottom() + 0 + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_TRAJECTORY_DEL, hInstance, NULL);
 
    CreateWindow(WC_BUTTON, TEXT("catch"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-       appstate->ar.GetRight() + 0.5*BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+       appstate->ar.GetRight() + 0.5*BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_TRAJECTORY_CATCH, hInstance, NULL);
 
    CreateWindow(WC_BUTTON, TEXT("drop"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-       appstate->ar.GetRight() + BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+       appstate->ar.GetRight() + BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_TRAJECTORY_REL, hInstance, NULL);
 
    CreateWindow(WC_BUTTON, TEXT("stop"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-       appstate->ar.GetRight() + 1.5*BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+       appstate->ar.GetRight() + 1.5*BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_TRAJECTORY_STOP, hInstance, NULL);
 
    CreateWindow(WC_BUTTON, TEXT("follow"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
