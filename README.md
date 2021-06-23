@@ -10,8 +10,18 @@ Na przykład:
 + funkcja draw jest odpowiedzialna za rysowanie 
 + funkcja script jest odpowiedzialna za sterowanie ramieniem robota
 
-### Triangle.h
+### Triangle.h Triangle.cpp
 Plik zawierający klasę Triangle
 
-### Robot.h
+### Robot.h Robot.cpp
 Plik zawierający klasę Robot
+
+<details>
+  <summary>### UniversalConvexShape.h UniversalConexShape.cpp ### </summary>
+  <p>
+  Pliki zawierające klasę odzwierciadlającą dowolny wypukły kształt.
+  Implementuje metody:
+    -rysujące na instancji obiektu graphics
+    -implementujące algorytm gjk
+  </p>
+</details>
