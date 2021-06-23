@@ -16,14 +16,9 @@ Plik zawierający klasę Triangle
 ### Robot.h Robot.cpp
 Plik zawierający klasę Robot
 
-<details>
-  <h3>
-  <summary> UniversalConvexShape.h UniversalConexShape.cpp </summary>
-  </h3>
-  <p>
-  Pliki zawierające klasę odzwierciadlającą dowolny wypukły kształt.
-  Implementuje metody:
-    -rysujące na instancji obiektu graphics
-    -implementujące algorytm gjk
-  </p>
-</details>
+### UniversalConvexShape.h UniversalConexShape.cpp 
+Pliki zawierające klasę odzwierciadlającą dowolny wypukły kształt.
+Implementuje metody:
+*rysujące na instancji obiektu graphics
+*implementujące algorytm gjk
+
