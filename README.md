@@ -19,6 +19,6 @@ Plik zawierający klasę Robot
 ### UniversalConvexShape.h UniversalConexShape.cpp 
 Pliki zawierające klasę odzwierciadlającą dowolny wypukły kształt.
 Implementuje metody:
-*rysujące na instancji obiektu graphics
-*implementujące algorytm gjk
++ rysujące na instancji obiektu graphics
++ implementujące algorytm gjk
 
