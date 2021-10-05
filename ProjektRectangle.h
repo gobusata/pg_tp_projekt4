@@ -8,7 +8,7 @@ class ProjektRectangle :
 {
 
 public:
-	ProjektRectangle(int = 200, int = 200, float = 0, Vector2f = { 0, 0 });
+	ProjektRectangle(int x = 200, int y = 200, float r = 0, Vector2f v = { 0, 0 }, float scale = 1.0);
 };
 
 

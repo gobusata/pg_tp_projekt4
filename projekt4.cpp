@@ -18,6 +18,9 @@ using namespace Gdiplus;
 #include "projekt4.h"
 #include "Triangle.h"
 #include "Robot.h"
+#include "ProjektConstraint.h"
+#include "ProjektConstraintPlane.h"
+#include "ProjektConstraintNoPenetration.h"
 #include "UniversalConvexShape.h"
 #include "ProjektRectangle.h"
 #include "ProjektTriangle.h"
@@ -49,14 +52,15 @@ class AppState
 {
 private:   
     //gravity
-    PointF gravity{ 0, 2e-5 };
+    PointF gravity{ 0, 100e-5 };
 
     std::vector<Triangle> triangles;
     std::vector<UniversalConvexShape> shapes;
+    std::vector<ProjektConstraint*> constraints;
     bool is_robot = false, run_script = false;
     Robot* robot = nullptr;
     int stage;
-    Intersection shapes_intersection;
+    Vector2f shapes_intersection;
     std::vector<PointF> collision_points{};
 
 public:
@@ -102,8 +106,8 @@ public:
         redPen(&redBrush, 2), greenPen(&greenBrush, 2), bluePen(&blueBrush, 2), whitePen(&whiteBrush, 2),
         pens{ &redPen, &greenPen, &bluePen },
         //initialize rects
-        client_rect(0, 0, 800, 530), ar(10, 10, 480, 370),
-        list_box_trajectory(), shapes_intersection{false}
+        client_rect(0, 0, 750, 530), ar(10, 10, 480, 370),
+        list_box_trajectory(), shapes_intersection{}
     {
         for (auto & p : pens)
         {
@@ -128,15 +132,17 @@ public:
         for (PointF p: collision_points)
         {
             graphics->FillRectangle(&this->blackBrush, p.X, p.Y, 5., 5.);
-
         }
+
+        graphics->FillRectangle(&this->blackBrush, round(shapes_intersection.x()), round(shapes_intersection.y()), 5., 5.);
 
         for (UniversalConvexShape& s : shapes)
         {
-            if (shapes_intersection.collision)
+           /* if (shapes_intersection)
                 s.draw(graphics, &redPen, nullptr);
             else
-                s.draw(graphics, &bluePen, nullptr);
+                s.draw(graphics, &bluePen, nullptr);*/
+            s.draw(graphics, &bluePen, nullptr);
         }
 
        
@@ -148,36 +154,56 @@ public:
     void update(REAL dt)
     {
         
-        for (std::vector<Triangle>::iterator tri = triangles.begin(); tri != triangles.end(); tri++)
-        {
-            tri->update(dt);
-            tri->collision_with_wall(&ar);
-            for (std::vector<Triangle>::iterator tri2 = tri + 1; tri2 != triangles.end(); tri2++)
-                tri->collision_with_figure(*tri2, dt);
-        }
+        //for (std::vector<Triangle>::iterator tri = triangles.begin(); tri != triangles.end(); tri++)
+        //{
+        //    tri->update(dt);
+        //    tri->collision_with_wall(&ar);
+        //    for (std::vector<Triangle>::iterator tri2 = tri + 1; tri2 != triangles.end(); tri2++)
+        //        tri->collision_with_figure(*tri2, dt);
+        //}
+
+        //for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
+        //{
+        //    s->update(dt);
+        //    s->collisionWithRect(ar, dt);
+        //    if(this->collision_points.size() > 10)
+        //        this->collision_points.clear();
+        //    for (std::vector<UniversalConvexShape>::iterator i = s + 1; i != shapes.end(); i++)
+        //    {
+        //        Intersection intersection = collisionDetection(*s, *i);
+        //        if (intersection.collision)
+        //        {
+        //            collisionWithMovingObjectSol(s->mass, s->inertia, s->vel, s->omega, intersection.point - s->pos,
+        //                i->mass, i->inertia, i->vel, i->omega, intersection.point - i->pos);
+        //            collision_points.push_back({ intersection.point[0], intersection.point[1] });
+        //            spdlog::get("basic_logger")->info("collision point  ({}, {})", intersection.point[0], intersection.point[1
+        //        }  
+        //    }
+        //}
+
 
         for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
+            s->updateVel(dt);
+        float lambda_sum_all = 0, lambda_sum = 0;
+        int i = 0;
+        for (std::vector<ProjektConstraint*>::iterator c = constraints.begin(); c != constraints.end(); c++)
+            (*c)->activateImpulse();
+        for (i= 0; i<5; i++)
         {
-            s->update(dt);
-            s->collisionWithRect(ar, dt);
-            if(this->collision_points.size() > 10)
-                this->collision_points.clear();
-            for (std::vector<UniversalConvexShape>::iterator i = s + 1; i != shapes.end(); i++)
-            {
-                Intersection intersection = collisionDetection(*s, *i);
-                if (intersection.collision)
-                {
-                    collisionWithMovingObjectSol(s->mass, s->inertia, s->vel, s->omega, intersection.point - s->pos,
-                        i->mass, i->inertia, i->vel, i->omega, intersection.point - i->pos);
-                    collision_points.push_back({ intersection.point[0], intersection.point[1] });
-                    spdlog::get("basic_logger")->info("collision point  ({}, {})", intersection.point[0], intersection.point[1]);
-
-                }
-                
-            }
-            
+            for (std::vector<ProjektConstraint*>::iterator c = constraints.begin(); c != constraints.end(); c++)
+                lambda_sum += (*c)->calcImpulse(dt);
+            for (std::vector<ProjektConstraint*>::iterator c = constraints.begin(); c != constraints.end(); c++)
+                (*c)->applyImpulse();
+            lambda_sum_all += lambda_sum;
+            if (lambda_sum_all * 0.1 > lambda_sum)
+                break;
+            if (lambda_sum_all == 0) break;
         }
-
+        if(i>0)
+            spdlog::get("basic_logger")->info("Number of loops: {}", i);
+        for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
+            s->updatePos(dt);
+        
         if (is_robot)
         {
             robot->update(dt);
@@ -186,7 +212,7 @@ public:
        
         if (shapes.size() == 2)
         {
-            shapes_intersection = gjkSimplex(shapes[0], shapes[1]);
+            shapes_intersection = dynamic_cast<ProjektConstraintNoPenetration*>(constraints[constraints.size() - 1])->point_of_contact();
         }
     }
 
@@ -201,9 +227,19 @@ public:
         triangles.push_back(Triangle(PointF(310, 170), 30, 120, { 0, 0 }, 0.0008));*/
 
         shapes.clear();
-        shapes.push_back(ProjektTriangle(200, 340, 0, { 0, -0.02 }));
-        shapes.push_back(ProjektTriangle(200, 285, 3.14 * 0, { 0, 0 }));
-        shapes.push_back(ProjektRectangle(45, 340, 3.14 * 0.23, { 0, 0 }));
+        for (ProjektConstraint* c : constraints)
+            delete c;
+        constraints.clear();
+        UniversalConvexShape::gravity = { 0, 1e-5 };
+        shapes.push_back(ProjektRectangle(200, 100, 3.14 * 0, { 0, 0 }, 2));
+        shapes.push_back(ProjektRectangle(200, 300, 3.14 * 0.04, { 0, -0.025 }, 2));
+        constraints.push_back(new ProjektConstraintPlane(shapes[0], { 0, 1 }, { 0, ar.GetBottom() }));
+        constraints.push_back(new ProjektConstraintPlane(shapes[1], { 0, 1 }, { 0, ar.GetBottom() }));
+        //constraints.push_back(new ProjektConstraintPlane(shapes[0], { 1, 0 }, { ar.GetRight(), 0 }));
+        //constraints.push_back(new ProjektConstraintPlane(shapes[1], { 1, 0 }, { ar.GetRight(), 0 }));
+        //constraints.push_back(new ProjektConstraintPlane(shapes[0], { -1, 0 }, { ar.GetLeft(), 0 }));
+        //constraints.push_back(new ProjektConstraintPlane(shapes[1], { -1, 0 }, { ar.GetLeft(), 0 }));
+        constraints.push_back(new ProjektConstraintNoPenetration(shapes[0], shapes[1]));
     }
 
     void demo2()
@@ -348,6 +384,8 @@ public:
 
     ~AppState()
     {
+        for (ProjektConstraint* i : constraints)
+            delete i;
         if (is_robot) delete robot;
     }
 };
@@ -394,19 +432,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     std::chrono::duration<REAL, std::milli> update_interval(1e-1);
     do
     {
-        
-        
-        std::chrono::duration<REAL, std::milli> dt(sc.now() - one_loop_start);
-       
+        std::chrono::milliseconds dt(std::chrono::duration_cast<std::chrono::milliseconds>(sc.now() - one_loop_start));
         if (dt > update_interval)
         {
             std::chrono::steady_clock::time_point temp = sc.now();
-            appState->update(dt.count());
+            //appState->update((dt.count() > 50)?50:dt.count());
+            spdlog::get("basic_logger")->info("period: {}ms, interval: {}ms", dt.count(), interval.count());
+            appState->update(50);
             one_loop_start = temp;
         }
-        
-        
-        
 
         if (sc.now() - fps_start > interval)
         {
@@ -487,7 +521,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
       CW_USEDEFAULT, CW_USEDEFAULT, window_rect.GetRight() - window_rect.GetLeft() + 10, window_rect.GetBottom() - window_rect.GetTop(),
        nullptr, nullptr, hInstance, reinterpret_cast<void*>(appstate));
 
-   CreateWindow(WC_BUTTON, TEXT("demo 1"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+   CreateWindow(WC_BUTTON, TEXT("&demo 1"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
        appstate->client_rect.GetLeft(), appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
        m_hwnd, (HMENU)ID_DEMO1, hInstance, NULL);
    

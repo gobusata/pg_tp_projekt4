@@ -361,3 +361,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/tp projekt4 wideo/podstawowy ruch robota.webm
+/tp projekt4 wideo/test dynamiki.webm
+/tp projekt4 wideo/wcztanie trajektori.webm
+/tp projekt4 wideo/zmiana predkosci.webm

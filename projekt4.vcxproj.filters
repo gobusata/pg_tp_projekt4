@@ -45,6 +45,15 @@
     <ClInclude Include="ProjektTriangle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ProjektConstraint.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ProjektConstraintPlane.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ProjektConstraintNoPenetration.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="projekt4.cpp">
@@ -63,6 +72,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ProjektTriangle.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ProjektConstraint.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ProjektConstraintPlane.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ProjektConstraintNoPenetration.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

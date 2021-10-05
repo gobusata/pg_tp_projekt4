@@ -1,9 +1,9 @@
 #include "ProjektRectangle.h"
 
-ProjektRectangle::ProjektRectangle(int x, int y, float r, Vector2f v): UniversalConvexShape()
+ProjektRectangle::ProjektRectangle(int x, int y, float r, Vector2f v, float scale): UniversalConvexShape()
 {
 	
-	float width = 20, height = 20;
+	float width = scale*20, height = scale*20;
 	vertices.resize(4);
 		
 	vertices[0] << width , height;
@@ -15,8 +15,11 @@ ProjektRectangle::ProjektRectangle(int x, int y, float r, Vector2f v): Universal
 	rot = r;
 	vel = v;
 	omega = 0.000;
+	inertia = mass / 3 * (width * width + height * height);
 	createShape();	
 }
+
+
 
 
 
