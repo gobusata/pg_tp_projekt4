@@ -48,7 +48,7 @@ class AppState
 {
 private:   
     //gravity
-    PointF gravity{ 0, 2e-5 };
+    PointF gravity{ 0, 1e-5 };
 
     std::vector<Triangle> triangles;
     bool is_robot = false, run_script = false;
@@ -170,12 +170,6 @@ public:
         triangles.erase(triangles.begin(), triangles.end());
         triangles.push_back(Triangle(PointF(110, 250), 100, 170, { 0, 0 }, 0));
         triangles.push_back(Triangle(PointF(200, 100), 30, 0, { 0, 0 }, 0));
-      /*  Triangle::gravity = { 0, 0 };
-        is_robot = false;
-        triangles.clear();
-        triangles.push_back(Triangle({ 250, 148 }, 50, 90, { -0.03, 0 }, 0));
-        triangles.push_back(Triangle({ 150, 152 }, 50, 90, { 0.01, 0 }, 0));*/
-
     }
 
     void demo3()

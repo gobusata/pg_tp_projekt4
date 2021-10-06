@@ -36,7 +36,7 @@ public:
 	
 	void collision_with_figure(Triangle& tri, REAL dt);
 	
-	void collision_with_figure2(PointF& vel1, REAL& omega1, const PointF& r1, PointF& vel2, REAL& omega2, const PointF& r2, const Triangle& tri, const PointF& sur);
+	void collision_with_figure2(PointF& vel1, REAL& omega1, const PointF& r1, PointF& vel2, REAL& omega2, const PointF& r2, const Triangle& tri, const PointF& sur, const float dt);
 
 	void collision_with_static_figure(PointF& vel, REAL& omega, const PointF& r);
 	

@@ -51,8 +51,6 @@ void Triangle::update(REAL dt, PointF* relative_vector)
 	m1.TransformVectors(relative_vector);
 }
 
-
-
 void Triangle::collision_with_wall(const RectF* walls)
 {
 	for (PointF* r = ver; r < ver + 3; r++)
@@ -113,37 +111,71 @@ void Triangle::collision_with_figure(Triangle& tri, REAL dt)
 			PointF r1 = res - pos, r2 = res - tri.pos;
 
 			REAL v01x = vel.X, v01y = vel.Y, v02x = tri.vel.X, v02y = tri.vel.Y, omega01 = omega, omega02 = tri.omega;
-			collision_with_figure2(vel, omega, r1, tri.vel, tri.omega, r2, tri, sur);
+			collision_with_figure2(vel, omega, r1, tri.vel, tri.omega, r2, tri, sur, dt);
 
 		}
 	}
 }
 
+
+//void Triangle::collision_with_figure2(PointF& vel1, REAL& omega1, const PointF& r1, PointF& vel2, REAL& omega2, const PointF& r2, \
+//	const Triangle& tri, const PointF& sur, const float dt)
+//{
+//	Vector2f normal{ sur.X, sur.Y };
+//	normal.normalize();
+//	MatrixXf jmat(1, 6);
+//	//jmat << normal[0], normal[1], normal[1] * r1.X - normal[0] * r1.Y, -normal[0], -normal[1], normal[0] * r2.Y - normal[1] * r2.X;
+//	jmat << normal[0], normal[1], normal[1] * r1.X - normal[0] * r1.Y, -normal[0], -normal[1], normal[0] * r2.Y - normal[1] * r2.X;
+//	float jminvjt = (jmat(0, 0) * jmat(0, 0) + jmat(0, 1) * jmat(0, 1)) / mass +
+//		jmat(0, 2) * jmat(0, 2) / inertia +
+//		(jmat(0, 3) * jmat(0, 3) + jmat(0, 4) * jmat(0, 4)) / tri.mass +
+//		jmat(0, 5) * jmat(0, 5) / tri.inertia;
+//	float lambda = -1 / jminvjt * (jmat(0, 0) * vel1.X + jmat(0, 1) * vel1.Y + jmat(0, 2) * omega1 + 
+//		jmat(0, 3) * vel2.X + jmat(0, 4) * vel2.Y + jmat(0, 5) * omega2 - inner_product(sur, sur) / dt * 0.0005);
+//	if (lambda > 0)
+//	{
+//		vel1.X += jmat(0, 0) * lambda / mass;
+//		vel1.Y += jmat(0, 1) * lambda / mass;
+//		omega1 += jmat(0, 2) * lambda / inertia;
+//		vel2.X += jmat(0, 3) * lambda / tri.mass;
+//		vel2.Y += jmat(0, 4) * lambda / tri.mass;
+//		omega2 += jmat(0, 5) * lambda / tri.inertia;
+//	}
+//}
+
 void Triangle::collision_with_figure2(PointF& vel1, REAL& omega1, const PointF& r1, PointF& vel2, REAL& omega2, const PointF& r2, \
-	const Triangle& tri, const PointF& sur)
+	const Triangle& tri, const PointF& sur, const float dt)
 {
+	MatrixXf j_mat(2, 6);
 	Vector2f normal{ sur.X, sur.Y };
 	normal.normalize();
-	MatrixXf jmat(1, 6);
-	//jmat << normal[0], normal[1], normal[1] * r1.X - normal[0] * r1.Y, -normal[0], -normal[1], normal[0] * r2.Y - normal[1] * r2.X;
-	jmat << normal[0], normal[1], normal[1] * r1.X - normal[0] * r1.Y, -normal[0], -normal[1], normal[0] * r2.Y - normal[1] * r2.X;
-	float jminvjt = (jmat(0, 0) * jmat(0, 0) + jmat(0, 1) * jmat(0, 1)) / mass +
-		jmat(0, 2) * jmat(0, 2) / inertia +
-		(jmat(0, 3) * jmat(0, 3) + jmat(0, 4) * jmat(0, 4)) / tri.mass +
-		jmat(0, 5) * jmat(0, 5) / tri.inertia;
-	float lambda = -1 / jminvjt * (jmat(0, 0) * vel1.X + jmat(0, 1) * vel1.Y + jmat(0, 2) * omega1 + 
-		jmat(0, 3) * vel2.X + jmat(0, 4) * vel2.Y + jmat(0, 5) * omega2);
-	if (lambda > 0)
-	{
-		vel1.X += jmat(0, 0) * lambda / mass;
-		vel1.Y += jmat(0, 1) * lambda / mass;
-		omega1 += jmat(0, 2) * lambda / inertia;
-		vel2.X += jmat(0, 3) * lambda / tri.mass;
-		vel2.Y += jmat(0, 4) * lambda / tri.mass;
-		omega2 += jmat(0, 5) * lambda / tri.inertia;
-	}
-}
+	Vector2f tangent{ normal[1], -normal[0] };
+	j_mat << normal[0], normal[1], normal[1] * r1.X - normal[0] * r1.Y, -normal[0], -normal[1], normal[0] * r2.Y - normal[1] * r2.X,
+		tangent[0], tangent[1], tangent[1] * r1.X - tangent[0] * r1.Y, -tangent[0], -tangent[1], tangent[0] * r2.Y - tangent[1] * r2.X;
 
+	MatrixXf minv_mat(6, 6);
+	minv_mat.setZero();
+	minv_mat(0, 0) = minv_mat(1, 1) = 1/mass;
+	minv_mat(2, 2) = 1/inertia;
+	minv_mat(3, 3) = minv_mat(4, 4) = 1 / tri.mass;
+	minv_mat(5, 5) = 1 / tri.inertia;
+	float cn, ct;
+	cn = j_mat(0, 0) * vel1.X + j_mat(0, 1) * vel1.Y + j_mat(0, 2) * omega1 + j_mat(0, 3) * vel2.X + j_mat(0, 4) * vel2.Y + j_mat(0, 5) * omega2 - inner_product(sur, sur) / dt * 0.0005;
+	ct = j_mat(1, 0) * vel1.X + j_mat(1, 1) * vel1.Y + j_mat(1, 2) * omega1 + j_mat(1, 3) * vel2.X + j_mat(1, 4) * vel2.Y + j_mat(1, 5) * omega2;
+
+	Vector2f lambda = -(j_mat * minv_mat * j_mat.transpose()).householderQr().solve(Vector2f { cn, ct });
+	Matrix2f tmp{ j_mat * minv_mat * j_mat.transpose() };
+	if (lambda[0] > 0)
+	{
+		vel1.X += (lambda[0] * j_mat(0, 0) + lambda[1] * j_mat(1, 0)) / mass;
+		vel1.Y += (lambda[0] * j_mat(0, 1) + lambda[1] * j_mat(1, 1)) / mass;
+		omega1 += (lambda[0] * j_mat(0, 2) + lambda[1] * j_mat(1, 2)) / inertia;
+		vel2.X += (lambda[0] * j_mat(0, 3) + lambda[1] * j_mat(1, 3)) / tri.mass;
+		vel2.Y += (lambda[0] * j_mat(0, 4) + lambda[1] * j_mat(1, 4)) / tri.mass;
+		omega2 += (lambda[0] * j_mat(0, 5) + lambda[1] * j_mat(1, 5)) / tri.inertia;
+	}
+
+}
 
 void Triangle::collision_with_static_figure(PointF& vel, REAL& omega, const PointF& r)
 {
