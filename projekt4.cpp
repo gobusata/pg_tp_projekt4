@@ -170,6 +170,12 @@ public:
         triangles.erase(triangles.begin(), triangles.end());
         triangles.push_back(Triangle(PointF(110, 250), 100, 170, { 0, 0 }, 0));
         triangles.push_back(Triangle(PointF(200, 100), 30, 0, { 0, 0 }, 0));
+      /*  Triangle::gravity = { 0, 0 };
+        is_robot = false;
+        triangles.clear();
+        triangles.push_back(Triangle({ 250, 148 }, 50, 90, { -0.03, 0 }, 0));
+        triangles.push_back(Triangle({ 150, 152 }, 50, 90, { 0.01, 0 }, 0));*/
+
     }
 
     void demo3()
@@ -390,17 +396,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     std::chrono::steady_clock::time_point fps_start = sc.now();
     std::chrono::steady_clock::time_point one_loop_start = sc.now();
     std::chrono::steady_clock::time_point start_count = sc.now();
-    std::chrono::duration<REAL, std::milli> update_interval(1e-1);
+    std::chrono::milliseconds update_interval(10);
     do
     {
         
         
-        std::chrono::duration<REAL, std::milli> dt(sc.now() - one_loop_start);
+        std::chrono::milliseconds dt(std::chrono::duration_cast<std::chrono::milliseconds>(sc.now() - one_loop_start));
        
         if (dt > update_interval)
         {
             std::chrono::steady_clock::time_point temp = sc.now();
             appState->update(dt.count());
+            if (dt.count() < 50)
+                appState->update(dt.count());
+            else
+                appState->update(50);
+            spdlog::get("basic_logger")->info("dt.count() = {}", dt.count());
             one_loop_start = temp;
         }
         

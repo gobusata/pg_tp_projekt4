@@ -6,7 +6,10 @@
 #include <cmath>
 #include <algorithm>
 #include <gsl/gsl_linalg.h>
+#include <Eigen/dense>
+#include <Eigen/geometry>
 
+using namespace Eigen;
 using namespace Gdiplus;
 
 PointF operator*(PointF p, REAL f);
@@ -19,7 +22,7 @@ class Triangle
 
 public:
 	PointF pos, ver[3], vel{ 0.0001, 0 };
-	REAL size = 50, mass = 1, inertia = mass*size*size/12, omega = 0.0001;
+	REAL size = 50, mass = 1, inertia = mass*size*size/12, omega = 0.0001, bounding_sphere = 1.1*size;
 	static PointF gravity;
 	Triangle(PointF pos_, REAL size_, REAL initial_rotation_ = 120, PointF vel_ = { 0.0001, 0 }, REAL omega_ = 0.0002);
 
