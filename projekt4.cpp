@@ -220,11 +220,6 @@ public:
     {
         Triangle::gravity = gravity;
         is_robot = false;
-        /*triangles.erase(triangles.begin(), triangles.end());
-        triangles.push_back(Triangle(PointF(100, 100), 30, 120, { 0, 0 }, 0.0002));
-        triangles.push_back(Triangle(PointF(170, 120), 30, 120, { 0, 0 }, 0.0004));
-        triangles.push_back(Triangle(PointF(240, 150), 30, 120, { 0, 0 }, 0.0006));
-        triangles.push_back(Triangle(PointF(310, 170), 30, 120, { 0, 0 }, 0.0008));*/
 
         shapes.clear();
         for (ProjektConstraint* c : constraints)
@@ -235,10 +230,6 @@ public:
         shapes.push_back(ProjektRectangle(200, 300, 3.14 * 0.04, { 0, -0.025 }, 2));
         constraints.push_back(new ProjektConstraintPlane(shapes[0], { 0, 1 }, { 0, ar.GetBottom() }));
         constraints.push_back(new ProjektConstraintPlane(shapes[1], { 0, 1 }, { 0, ar.GetBottom() }));
-        //constraints.push_back(new ProjektConstraintPlane(shapes[0], { 1, 0 }, { ar.GetRight(), 0 }));
-        //constraints.push_back(new ProjektConstraintPlane(shapes[1], { 1, 0 }, { ar.GetRight(), 0 }));
-        //constraints.push_back(new ProjektConstraintPlane(shapes[0], { -1, 0 }, { ar.GetLeft(), 0 }));
-        //constraints.push_back(new ProjektConstraintPlane(shapes[1], { -1, 0 }, { ar.GetLeft(), 0 }));
         constraints.push_back(new ProjektConstraintNoPenetration(shapes[0], shapes[1]));
     }
 
@@ -246,9 +237,15 @@ public:
     {
         Triangle::gravity = gravity;
         is_robot = false;
-        triangles.erase(triangles.begin(), triangles.end());
-        triangles.push_back(Triangle(PointF(110, 250), 100, 170, { 0, 0 }, 0));
-        triangles.push_back(Triangle(PointF(200, 100), 30, 0, { 0, 0 }, 0));
+        shapes.clear();
+        for (ProjektConstraint* c : constraints)
+            delete c;
+        constraints.clear();
+        shapes.push_back(ProjektRectangle(200, 100, 3.14 * 0.25, { 0, 0 }, 2));
+        shapes.push_back(ProjektRectangle(200, 300, 3.14 * 0, { 0, 0 }, 2));
+        for (UniversalConvexShape& ucs : shapes)
+            constraints.push_back(new ProjektConstraintPlane(ucs, { 0, 1 }, { 0, ar.GetBottom() }));
+        constraints.push_back(new ProjektConstraintNoPenetration(shapes[0], shapes[1]));
     }
 
     void demo3()
@@ -436,9 +433,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         if (dt > update_interval)
         {
             std::chrono::steady_clock::time_point temp = sc.now();
-            //appState->update((dt.count() > 50)?50:dt.count());
+            appState->update((dt.count() > 50)?50:dt.count());
             spdlog::get("basic_logger")->info("period: {}ms, interval: {}ms", dt.count(), interval.count());
-            appState->update(50);
+            //appState->update(50);
             one_loop_start = temp;
         }
 

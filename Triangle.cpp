@@ -10,7 +10,7 @@ REAL inner_product(const PointF& p1, const PointF& p2)
 Triangle::Triangle(PointF pos_, REAL size_, REAL initial_rotation_, PointF vel_, REAL omega_) :
 	pos(pos_), size(size_), vel(vel_), omega(omega_)
 {
-	Matrix m0, m;
+	Gdiplus::Matrix m0, m;
 	m0.Rotate(initial_rotation_);
 	PointF v(0, -size);
 	m0.TransformVectors(&v);
@@ -33,7 +33,7 @@ void Triangle::draw(Graphics* lpgraphics_, Pen* lppen_)
 
 void Triangle::update(REAL dt)
 {
-	Matrix m1;
+	Gdiplus::Matrix m1;
 	pos = pos + vel * dt - gravity * 0.5 * dt * dt;
 	vel = vel + gravity * dt;
 	m1.RotateAt(180 / 3.14 * omega * dt, pos);
@@ -43,7 +43,7 @@ void Triangle::update(REAL dt)
 
 void Triangle::update(REAL dt, PointF* relative_vector)
 {
-	Matrix m1;
+	Gdiplus::Matrix m1;
 	m1.RotateAt(180 / 3.14 * omega * dt, pos);
 	m1.TransformVectors(relative_vector);
 }
@@ -109,13 +109,13 @@ void Triangle::collision_with_figure(Triangle& tri, REAL dt)
 		PointF r1 = res - pos, r2 = res - tri.pos;
 
 		REAL v01x = vel.X, v01y = vel.Y, v02x = tri.vel.X, v02y = tri.vel.Y, omega01 = omega, omega02 = tri.omega;
-		collision_with_figure2(vel, omega, r1, tri.vel, tri.omega, r2, tri, sur);
+		collision_with_figure2(vel, omega, r1, tri.vel, tri.omega, r2, tri, sur, dt);
 	
 	}
 }
 
 void Triangle::collision_with_figure2(PointF& vel1, REAL& omega1, const PointF& r1, PointF& vel2, REAL& omega2, const PointF& r2, \
-	const Triangle& tri, const PointF& sur)
+	const Triangle& tri, const PointF& sur, const float dt)
 {
 	REAL v01x = vel1.X, v01y = vel1.Y, v02x = vel2.X, v02y = vel2.Y, omega01 = omega1, omega02 = omega2;
 
