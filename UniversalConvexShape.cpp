@@ -71,11 +71,19 @@ void UniversalConvexShape::createShape()
 {
 	for (int i = 1; i < vertices.size(); i++)
 	{
-		shape.AddLine(vertices[i - 1][0], vertices[i - 1][1], \
-			vertices[i][0], vertices[i][1]);
+		Vector2f v1{ vertices[i - 1] };
+		Vector2f v2{ vertices[i] };
+		v1 += 0 * v1.normalized();
+		v2 += 0 * v2.normalized();
+
+		shape.AddLine(v1[0], v1[1], v2[0], v2[1]);
 	}
-	shape.AddLine(vertices[vertices.size() - 1][0], vertices[vertices.size() - 1][1], \
-		vertices[0][0], vertices[0][1]);
+
+	Vector2f v1{ *(vertices.end() - 1) }, v2{ vertices[0] };
+	v1 += 0 * v1.normalized();
+	v2 += 0 * v2.normalized();
+
+	shape.AddLine(v1[0], v1[1], v2[0], v2[1]);
 
 	this->sphere_bound = std::max_element(vertices.begin(), vertices.end(), \
 		[](Vector2f a, Vector2f b)->bool {return a.squaredNorm() < b.squaredNorm(); })->norm()*1.1;
@@ -137,22 +145,22 @@ Intersection UniversalConvexShape::collisionWithPlane(Vector2f position, Vector2
 	
 	if (dir.dot(position) < dir.dot(pos) + sphere_bound)
 	{
-		Vector2f supportVer = gjkSupportVer(dir);
+		VectorWithIndex supportVer = gjkSupportVer(dir);
 		//spdlog::get("basic_logger")->info("{} < {} + ({:.2f}, {:.2f})", dir.dot(position), dir.dot(pos), supportVer[0], supportVer[1]);
 		float tmp = dir.dot(supportVer) - dir.dot(position);
 		if (tmp > 0)
 		{
 			//pos -= tmp * dir;
-			return { true, supportVer, dir };
+			return Intersection{ true, supportVer, dir };
 		}
 		else
 		{
-			return { false, 1e9, {}, {} };
+			return Intersection{ false, abs(tmp), {}, {} };
 		}
 	}
 	else
 	{
-		return { false, 1e9, {}, {} };
+		return Intersection{ false, 1e9, {}, {} };
 	}
 }
 
@@ -278,25 +286,43 @@ Intersection gjkSimplex(const UniversalConvexShape& a,
 		return Intersection{ false, simplex[1].norm(), {simplex_vertices[1]}, {simplex_vertices[4]} };
 	}
 
-	dir = cross(cross(simplex[1] - simplex[0], -simplex[0]), simplex[1] - simplex[0]);
+	/*dir = cross(cross(simplex[1] - simplex[0], -simplex[0]), simplex[1] - simplex[0]);
 	dir.normalize();
 	simplex_vertices[2] = a.gjkSupportVer(dir);
 	simplex_vertices[5] = b.gjkSupportVer(-dir);
-	simplex[2] = simplex_vertices[2] - simplex_vertices[5];
-	if (dir.dot(simplex[2]) < 0)
-	{
-		ClosestFeature cs = pointToTriangle(simplex, { 0, 0 });
-		std::vector<VectorWithIndex> aClosestFeature{ cs.feature.size() }, bClosestFeature{ cs.feature.size() };
-		for (int i = 0; i < cs.feature.size(); i++)
-		{
-			aClosestFeature[i] = simplex_vertices[cs.feature[i].index];
-			bClosestFeature[i] = simplex_vertices[3 + cs.feature[i].index];
-		}
-		return Intersection{ false, cs.distance,  aClosestFeature, bClosestFeature};
-	}
+	simplex[2] = simplex_vertices[2] - simplex_vertices[5];*/
 
 	while (true)
 	{
+		dir = cross(cross(simplex[1] - simplex[0], -simplex[0]), simplex[1] - simplex[0]);
+		simplex_vertices[2] = a.gjkSupportVer(dir);
+		simplex_vertices[5] = b.gjkSupportVer(-dir);
+		simplex[2] = simplex_vertices[2] - simplex_vertices[5];
+
+		if (simplex_vertices[2] == simplex_vertices[0] && simplex_vertices[5] == simplex_vertices[3])
+		{
+			ClosestFeature cs = pointToLine({ simplex[0], simplex[1] }, { 0, 0 });
+			std::vector<VectorWithIndex> aClosestFeature{ cs.feature.size() }, bClosestFeature{ cs.feature.size() };
+			for (int i = 0; i < cs.feature.size(); i++)
+			{
+				aClosestFeature[i] = simplex_vertices[cs.feature[i].index];
+				bClosestFeature[i] = simplex_vertices[3 + cs.feature[i].index];
+			}
+			return Intersection{ false, cs.distance,  aClosestFeature, bClosestFeature };
+		}
+		if (simplex_vertices[2] == simplex_vertices[1] && simplex_vertices[5] == simplex_vertices[4])
+		{
+			ClosestFeature cs = pointToLine({ simplex[0], simplex[1] }, { 0, 0 });
+			std::vector<VectorWithIndex> aClosestFeature{ cs.feature.size() }, bClosestFeature{ cs.feature.size() };
+			for (int i = 0; i < cs.feature.size(); i++)
+			{
+				aClosestFeature[i] = simplex_vertices[cs.feature[i].index];
+				bClosestFeature[i] = simplex_vertices[3 + cs.feature[i].index];
+			}
+			return Intersection{ false, cs.distance,  aClosestFeature, bClosestFeature };
+		}
+
+
 		Vector3f coords = barycentricCoordinates3(simplex, Vector2f{ 0, 0 });
 
 		if (coords[0] >= 0 && coords[1] >= 0 && coords[2] >= 0)
@@ -329,7 +355,7 @@ Intersection gjkSimplex(const UniversalConvexShape& a,
 			normal = cross(1, normal);
 			normal.normalize();
 			ClosestFeature cs = pointToTriangle(simplex, { 0, 0 });
-			return { true, a1, normal };
+			return Intersection{ true, VectorWithIndex{0, a1}, normal };
 		}
 		else if (coords[1] < 0)
 		{
@@ -347,33 +373,7 @@ Intersection gjkSimplex(const UniversalConvexShape& a,
 			simplex_vertices[4] = simplex_vertices[5];
 		}
 
-		dir = cross(cross(simplex[1] - simplex[0], -simplex[0]), simplex[1] - simplex[0]);
-		simplex_vertices[2] = a.gjkSupportVer(dir);
-		simplex_vertices[5] = b.gjkSupportVer(-dir);
-		simplex[2] = simplex_vertices[2] - simplex_vertices[5];
-		if (dir.dot(simplex[2]) < 0)
-		{
-			ClosestFeature cs = pointToTriangle(simplex, { 0, 0 });
-			std::vector<VectorWithIndex> aClosestFeature{ cs.feature.size() }, bClosestFeature{ cs.feature.size() };
-			for (int i = 0; i < cs.feature.size(); i++)
-			{
-				aClosestFeature[i] = simplex_vertices[cs.feature[i].index];
-				bClosestFeature[i] = simplex_vertices[3 + cs.feature[i].index];
-			}
-			return Intersection{ false, cs.distance,  aClosestFeature, bClosestFeature };
-		}
-		if ((simplex_vertices[2] == simplex_vertices[0] && simplex_vertices[5] == simplex_vertices[3]) ||
-			(simplex_vertices[2] == simplex_vertices[1] && simplex_vertices[5] == simplex_vertices[4]))
-		{
-			ClosestFeature cs = pointToTriangle(simplex, { 0, 0 });
-			std::vector<VectorWithIndex> aClosestFeature{ cs.feature.size() }, bClosestFeature{ cs.feature.size() };
-			for (int i = 0; i < cs.feature.size(); i++)
-			{
-				aClosestFeature[i] = simplex_vertices[cs.feature[i].index];
-				bClosestFeature[i] = simplex_vertices[3 + cs.feature[i].index];
-			}
-			return Intersection{ false, cs.distance,  aClosestFeature, bClosestFeature };
-		}
+		
 	}
 
 	return { true };
@@ -543,19 +543,20 @@ Vector2f cartesianCoordinates(const std::vector<Vector2f> tri, const Vector3f bc
 
 ClosestFeature pointToTriangle(std::vector<Vector2f> tri, const Vector2f& p)
 {
+	assert(tri[0] != tri[1] && tri[1] != tri[2] && tri[0] != tri[2]);
 	Vector2f u1 = barycentricCoordinates2({ tri[0], tri[1] }, p);
 	Vector2f u2 = barycentricCoordinates2({tri[1], tri[2]}, p);
 	Vector2f u3 = barycentricCoordinates2({ tri[2], tri[0] }, p);
 	Vector3f v = barycentricCoordinates3({ tri[0], tri[1], tri[2] }, p);
 
-	if (u1(0) < 0 && u3(1) < 0) {
+	if (u1(0) <= 0 && u3(1) <= 0) {
 		return { {{0, tri[0]}}, (tri[0] - p).norm() };
 	}
-	else if (u1(1) < 0 && u2(0) < 0)
+	else if (u1(1) <= 0 && u2(0) <= 0)
 	{
 		return { {{1, tri[1]}}, (tri[1] - p).norm() };
 	}
-	else if (u2(1) < 0 && u3(0) < 0)
+	else if (u2(1) <= 0 && u3(0) <= 0)
 	{
 		return { {{2, tri[2]}}, (tri[2] - p).norm() };
 	}
@@ -587,6 +588,24 @@ ClosestFeature pointToTriangle(std::vector<Vector2f> tri, const Vector2f& p)
 	}
 }
 
+ClosestFeature pointToLine(std::vector<Vector2f> line, const Vector2f& p)
+{
+	Vector2f u = barycentricCoordinates2(line, p);
+	if (u(0) <= 0 && u(1) > 0)
+	{
+		return ClosestFeature{ {VectorWithIndex{0, line[0]}}, (line[0] - p).norm() };
+	}
+	else if (u(1) <= 0 && u(0) > 0)
+	{
+		return ClosestFeature{ {VectorWithIndex{1, line[1]}}, (line[1] - p).norm() };
+	}
+	else
+	{
+		return ClosestFeature{ {VectorWithIndex{0, line[0]}, VectorWithIndex{1, line[1]}},
+			abs(cross(line[1] - line[0], p - line[0])) / (line[1] - line[0]).norm() };
+	}
+}
+
 bool collisionDetectionWide(const UniversalConvexShape& a, const UniversalConvexShape& b)
 {
 	if (a.sphere_bound + b.sphere_bound > (a.pos - b.pos).norm())
@@ -613,7 +632,7 @@ Intersection::Intersection(bool a)
 	if (a)
 	{
 		collision = true;
-		point = { 0, 0 };
+		point = VectorWithIndex{ 0, { 0, 0 } };
 		normal = { 0, 0 };
 	}
 	else
@@ -627,16 +646,6 @@ Intersection::Intersection(bool a)
 
 Intersection::Intersection(const Intersection& a)
 {
-	/*if (a.collision)
-{
-	Intersection ret{ a.collision, a.point, a.normal };
-	return ret;
-}
-else
-{
-	Intersection ret{ a.collision, a.distance, a.aClosestFeature, a.bClosestFeature };
-	return ret;
-}*/
 	if (a.collision)
 	{
 		collision = true;
@@ -675,7 +684,7 @@ Intersection::~Intersection()
 {
 	if (collision)
 	{
-		point.~Vector2f();
+		point.~VectorWithIndex();
 		normal.~Vector2f();
 	}
 	else

@@ -154,6 +154,7 @@
     <ClInclude Include="ProjektConstraint.h" />
     <ClInclude Include="ProjektConstraintNoPenetration.h" />
     <ClInclude Include="ProjektConstraintPlane.h" />
+    <ClInclude Include="ProjektLogs.h" />
     <ClInclude Include="ProjektRectangle.h" />
     <ClInclude Include="ProjektTriangle.h" />
     <ClInclude Include="Resource.h" />
@@ -168,6 +169,7 @@
     <ClCompile Include="ProjektConstraint.cpp" />
     <ClCompile Include="ProjektConstraintNoPenetration.cpp" />
     <ClCompile Include="ProjektConstraintPlane.cpp" />
+    <ClCompile Include="ProjektLogs.cpp" />
     <ClCompile Include="ProjektRectangle.cpp" />
     <ClCompile Include="ProjektTriangle.cpp" />
     <ClCompile Include="Robot.cpp" />

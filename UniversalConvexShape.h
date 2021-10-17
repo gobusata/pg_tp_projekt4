@@ -14,6 +14,7 @@
 #include <gsl/gsl_linalg.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
+#include "ProjektLogs.h"
 
 using namespace Gdiplus;
 using namespace Eigen;
@@ -91,6 +92,7 @@ struct ClosestFeature
 	
 	ClosestFeature(std::vector<VectorWithIndex> a, float b) : feature{ a }, distance{ b } {};
 };
+
 /// <summary>
 /// Class describing contact of to convex 2D figures
 /// </summary>
@@ -99,7 +101,8 @@ struct Intersection
 	bool collision;
 	union {
 		struct {
-			Vector2f point, normal;
+			VectorWithIndex point;
+			Vector2f normal;
 		};
 		struct {
 			float distance;
@@ -107,13 +110,13 @@ struct Intersection
 		};
 	};
 	
-	ClosestFeature closestFeature;
+	//ClosestFeature closestFeature;
 
 	Intersection() : collision{ false }, distance(0), aClosestFeature{}, bClosestFeature{} {};
 	
 	Intersection(bool a);
 	
-	Intersection(bool a, Vector2f b, Vector2f c) : collision(true), point(b), normal(c) {};
+	Intersection(bool a, VectorWithIndex b, Vector2f c) : collision(true), point(b), normal(c) {};
 	
 	Intersection(bool a, float b, std::vector<VectorWithIndex> c, std::vector<VectorWithIndex> d) :
 		collision{ false }, distance{ b }, aClosestFeature{ c }, bClosestFeature{ d } {};
@@ -151,6 +154,8 @@ void collisionWithMovingObject(UniversalConvexShape&, UniversalConvexShape&);
 /// <param name="p">point coordinates</param>
 /// <returns></returns>
 ClosestFeature pointToTriangle(std::vector<Vector2f> tri, const Vector2f& p);
+
+ClosestFeature pointToLine(std::vector<Vector2f> line, const Vector2f& p);
 
 Vector2f barycentricCoordinates2(std::vector<Vector2f> line, const Vector2f);
 

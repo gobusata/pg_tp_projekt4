@@ -54,6 +54,9 @@
     <ClInclude Include="ProjektConstraintNoPenetration.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ProjektLogs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="projekt4.cpp">
@@ -81,6 +84,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ProjektConstraintNoPenetration.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ProjektLogs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

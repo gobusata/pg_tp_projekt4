@@ -9,8 +9,6 @@
 #include <ShObjIdl.h>
 #include <oleacc.h>
 #include <strsafe.h>
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/basic_file_sink.h>
 #include <sstream>
 using namespace Gdiplus;
 
@@ -18,6 +16,7 @@ using namespace Gdiplus;
 #include "projekt4.h"
 #include "Triangle.h"
 #include "Robot.h"
+#include "ProjektLogs.h"
 #include "ProjektConstraint.h"
 #include "ProjektConstraintPlane.h"
 #include "ProjektConstraintNoPenetration.h"
@@ -52,7 +51,7 @@ class AppState
 {
 private:   
     //gravity
-    PointF gravity{ 0, 100e-5 };
+    PointF gravity{ 0, 5e-4 };
 
     std::vector<Triangle> triangles;
     std::vector<UniversalConvexShape> shapes;
@@ -188,19 +187,23 @@ public:
         int i = 0;
         for (std::vector<ProjektConstraint*>::iterator c = constraints.begin(); c != constraints.end(); c++)
             (*c)->activateImpulse();
-        for (i= 0; i<5; i++)
+        for (ProjektConstraint* c : constraints)
+            c->applyAccImpulse();
+        for (i= 0; i<20; i++)
         {
             for (std::vector<ProjektConstraint*>::iterator c = constraints.begin(); c != constraints.end(); c++)
                 lambda_sum += (*c)->calcImpulse(dt);
             for (std::vector<ProjektConstraint*>::iterator c = constraints.begin(); c != constraints.end(); c++)
                 (*c)->applyImpulse();
             lambda_sum_all += lambda_sum;
+            if (lambda_sum_all == 0) break;
             if (lambda_sum_all * 0.1 > lambda_sum)
                 break;
-            if (lambda_sum_all == 0) break;
         }
         if(i>0)
             spdlog::get("basic_logger")->info("Number of loops: {}", i);
+        for (std::vector<ProjektConstraint*>::iterator c = constraints.begin(); c != constraints.end(); c++)
+            (*c)->storeAccImpulse();
         for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
             s->updatePos(dt);
         
@@ -212,7 +215,7 @@ public:
        
         if (shapes.size() == 2)
         {
-            shapes_intersection = dynamic_cast<ProjektConstraintNoPenetration*>(constraints[constraints.size() - 1])->point_of_contact();
+            
         }
     }
 
@@ -225,11 +228,11 @@ public:
         for (ProjektConstraint* c : constraints)
             delete c;
         constraints.clear();
-        UniversalConvexShape::gravity = { 0, 1e-5 };
-        shapes.push_back(ProjektRectangle(200, 100, 3.14 * 0, { 0, 0 }, 2));
-        shapes.push_back(ProjektRectangle(200, 300, 3.14 * 0.04, { 0, -0.025 }, 2));
-        constraints.push_back(new ProjektConstraintPlane(shapes[0], { 0, 1 }, { 0, ar.GetBottom() }));
-        constraints.push_back(new ProjektConstraintPlane(shapes[1], { 0, 1 }, { 0, ar.GetBottom() }));
+        UniversalConvexShape::gravity = { 0, gravity.Y };
+        shapes.push_back(ProjektRectangle(200, 195, 3.14 * 0, { 0, 0 }, 2));
+        shapes.push_back(ProjektRectangle(200, 300, 3.14 * 0, { 0, 0 }, 2));
+        for (UniversalConvexShape& ucs : shapes)
+            constraints.push_back(new ProjektConstraintPlane(ucs, { 0, 1 }, { 0, ar.GetBottom() }));
         constraints.push_back(new ProjektConstraintNoPenetration(shapes[0], shapes[1]));
     }
 
@@ -241,7 +244,8 @@ public:
         for (ProjektConstraint* c : constraints)
             delete c;
         constraints.clear();
-        shapes.push_back(ProjektRectangle(200, 100, 3.14 * 0.25, { 0, 0 }, 2));
+        UniversalConvexShape::gravity = { 0, gravity.Y };
+        shapes.push_back(ProjektRectangle(200, 200, 3.14 * 0.25, { 0, 0 }, 2));
         shapes.push_back(ProjektRectangle(200, 300, 3.14 * 0, { 0, 0 }, 2));
         for (UniversalConvexShape& ucs : shapes)
             constraints.push_back(new ProjektConstraintPlane(ucs, { 0, 1 }, { 0, ar.GetBottom() }));
@@ -433,7 +437,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         if (dt > update_interval)
         {
             std::chrono::steady_clock::time_point temp = sc.now();
-            appState->update((dt.count() > 50)?50:dt.count());
+            appState->update((dt.count() > 30)?30:dt.count());
             spdlog::get("basic_logger")->info("period: {}ms, interval: {}ms", dt.count(), interval.count());
             //appState->update(50);
             one_loop_start = temp;
