@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _PROJEKT_LOGS_
+#define _PROJEKT_LOGS_
 #include <spdlog/formatter.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
@@ -7,21 +8,58 @@
 
 using namespace Eigen;
 
-template <>
-struct fmt::formatter<Vector2f>
-{
-	char presentation = 'f';
-	constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
-	{
-		auto it = ctx.begin(), end = ctx.end();
-		return end;
-	}
 
-	template <typename FormatContext>
-	auto format(const Vector2f& p, FormatContext& ctx) -> decltype(ctx.out()) {
-		return format_to(
-			ctx.out(),
-			"({:.2f}, {:.2f})",
-			p[0], p[1]);
-	}
+template<typename Ostream>
+Ostream & operator<<(Ostream & os, const Eigen::Vector2f & val)
+{
+	return os << "(" << val.x() << ", " << val.y() << ")";
+}
+
+template <typename OutputIt, typename CharT>
+OutputIt copy_str(OutputIt it, const CharT s[])
+{
+    const CharT* c = s;
+    while(*c)
+    {
+        *it++ = *c;
+        c++;
+    }
+    return it;
+}
+
+template <typename Scalar_, int Rows_, int Cols_>
+struct fmt::formatter<Eigen::Matrix<Scalar_, Rows_, Cols_>>: fmt::formatter<float>
+{
+    template<typename FormatContext>
+    auto format(const Eigen::Matrix<Scalar_, Rows_, Cols_>& v,
+        FormatContext& ctx)->decltype(ctx.out())
+    {
+        copy_str(ctx.out(), "(");
+        for(int i = 0; i<Rows_-1; i++)
+        {
+            for(int j = 0; j<Cols_-1; j++)
+            {
+                fmt::formatter<Scalar_>::format(v(i, j), ctx);
+                *ctx.out() = ',';
+                *ctx.out() = ' ';
+            }
+            fmt::formatter<Scalar_>::format(v(i, Cols_ - 1), ctx);
+            copy_str(ctx.out(), "; ");
+        }
+        fmt::formatter<Scalar_>::format(v(Rows_ - 1, Cols_ -1), ctx);
+        copy_str(ctx.out(), ")");
+        return ctx.out();
+    }
 };
+
+extern std::shared_ptr<spdlog::logger> logger;
+template <typename FormatString, typename... Args> 
+inline void dbgmsg(const FormatString& fmt, Args&&...args)
+{
+#ifdef _DEBUG
+	spdlog::get("basic_logger")->info(fmt, args...);
+#endif // _DEBUG
+
+}
+
+#endif // !_PROJEKT_LOGS_
