@@ -55,7 +55,9 @@ private:
 
     std::vector<Triangle> triangles;
     std::vector<UniversalConvexShape> shapes;
-    std::vector<ProjektConstraint*> constraints;
+    std::vector<std::shared_ptr<ProjektConstraint>> constraints;
+    std::vector<std::shared_ptr<ProjektConstraintNoPenetration>> noPenetrationConstraints;
+    std::vector<std::shared_ptr<ProjektConstraintPlane>> planeConstraints;
     bool is_robot = false, run_script = false;
     Robot* robot = nullptr;
     int stage;
@@ -112,10 +114,6 @@ public:
         {
             p->SetLineCap(LineCapRound, LineCapRound, DashCapRound);
         }
-        auto logger = spdlog::basic_logger_mt("basic_logger", "logs/basic-log.txt", true);
-        
-        
-
     }
 
     void draw(Graphics* graphics)
@@ -133,18 +131,36 @@ public:
             graphics->FillRectangle(&this->blackBrush, p.X, p.Y, 5., 5.);
         }
 
-        graphics->FillRectangle(&this->blackBrush, round(shapes_intersection.x()), round(shapes_intersection.y()), 5., 5.);
+        //graphics->FillRectangle(&this->blackBrush, round(shapes_intersection.x()), round(shapes_intersection.y()), 5., 5.);
 
         for (UniversalConvexShape& s : shapes)
         {
-           /* if (shapes_intersection)
-                s.draw(graphics, &redPen, nullptr);
-            else
-                s.draw(graphics, &bluePen, nullptr);*/
             s.draw(graphics, &bluePen, nullptr);
         }
 
-       
+        for (std::shared_ptr<const ProjektConstraintNoPenetration>  con : noPenetrationConstraints)
+        {
+            for (const ProjektConstraintNoPenetration::SubConstraint& sc : con->subconstraints)
+            {
+                if (sc.valid)
+                {
+                    Vector2f tmp{ con->point_of_contact(sc) };
+                    graphics->FillRectangle(&this->blackBrush, round(tmp[0]), round(tmp[1]), 3., 3.);
+                }
+            }
+        }
+
+        for (std::shared_ptr<const ProjektConstraintPlane> con : planeConstraints)
+        {
+            for (const ProjektConstraintPlane::SubConstraint& sc : con->subconstraints)
+            {
+                if (sc.active)
+                {
+                    Vector2f tmp{ con->point_of_contact(sc) };
+                    graphics->FillRectangle(&this->redBrush, round(tmp[0]), round(tmp[1]), 3., 3.);
+                }
+            }
+        }
 
         if (is_robot) robot->draw(graphics);
 
@@ -152,57 +168,29 @@ public:
 
     void update(REAL dt)
     {
-        
-        //for (std::vector<Triangle>::iterator tri = triangles.begin(); tri != triangles.end(); tri++)
-        //{
-        //    tri->update(dt);
-        //    tri->collision_with_wall(&ar);
-        //    for (std::vector<Triangle>::iterator tri2 = tri + 1; tri2 != triangles.end(); tri2++)
-        //        tri->collision_with_figure(*tri2, dt);
-        //}
-
-        //for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
-        //{
-        //    s->update(dt);
-        //    s->collisionWithRect(ar, dt);
-        //    if(this->collision_points.size() > 10)
-        //        this->collision_points.clear();
-        //    for (std::vector<UniversalConvexShape>::iterator i = s + 1; i != shapes.end(); i++)
-        //    {
-        //        Intersection intersection = collisionDetection(*s, *i);
-        //        if (intersection.collision)
-        //        {
-        //            collisionWithMovingObjectSol(s->mass, s->inertia, s->vel, s->omega, intersection.point - s->pos,
-        //                i->mass, i->inertia, i->vel, i->omega, intersection.point - i->pos);
-        //            collision_points.push_back({ intersection.point[0], intersection.point[1] });
-        //            spdlog::get("basic_logger")->info("collision point  ({}, {})", intersection.point[0], intersection.point[1
-        //        }  
-        //    }
-        //}
-
-
         for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
             s->updateVel(dt);
-        float lambda_sum_all = 0, lambda_sum = 0;
+        float lambda_sum_all = 0, lambda_sum;
         int i = 0;
-        for (std::vector<ProjektConstraint*>::iterator c = constraints.begin(); c != constraints.end(); c++)
+        for (std::vector<std::shared_ptr<ProjektConstraint>>::iterator c = constraints.begin(); c != constraints.end(); c++)
             (*c)->activateImpulse();
-        for (ProjektConstraint* c : constraints)
-            c->applyAccImpulse();
-        for (i= 0; i<20; i++)
+        for (std::shared_ptr<ProjektConstraint> & c : constraints)
+            lambda_sum_all += c->applyAccImpulse();
+        for (i= 0; i<80; i++)
         {
-            for (std::vector<ProjektConstraint*>::iterator c = constraints.begin(); c != constraints.end(); c++)
+            lambda_sum = 0;
+            for (std::vector<std::shared_ptr<ProjektConstraint>>::iterator c = constraints.begin(); c != constraints.end(); c++)
                 lambda_sum += (*c)->calcImpulse(dt);
-            for (std::vector<ProjektConstraint*>::iterator c = constraints.begin(); c != constraints.end(); c++)
+            for (std::vector<std::shared_ptr<ProjektConstraint>>::iterator c = constraints.begin(); c != constraints.end(); c++)
                 (*c)->applyImpulse();
             lambda_sum_all += lambda_sum;
             if (lambda_sum_all == 0) break;
-            if (lambda_sum_all * 0.1 > lambda_sum)
+            if (lambda_sum_all * 0.01 > lambda_sum && lambda_sum < 1e-9)
                 break;
         }
-        if(i>0)
-            spdlog::get("basic_logger")->info("Number of loops: {}", i);
-        for (std::vector<ProjektConstraint*>::iterator c = constraints.begin(); c != constraints.end(); c++)
+        if (i > 0)
+            dbgmsg("Number of loops: {}\t\t sum lambda = {:.4e}", i, lambda_sum_all);
+        for (std::vector<std::shared_ptr<ProjektConstraint>>::iterator c = constraints.begin(); c != constraints.end(); c++)
             (*c)->storeAccImpulse();
         for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
             s->updatePos(dt);
@@ -221,19 +209,29 @@ public:
 
     void demo1()
     {
-        Triangle::gravity = gravity;
         is_robot = false;
 
         shapes.clear();
-        for (ProjektConstraint* c : constraints)
-            delete c;
+        noPenetrationConstraints.clear();
         constraints.clear();
+        noPenetrationConstraints.clear();
+        planeConstraints.clear();
         UniversalConvexShape::gravity = { 0, gravity.Y };
-        shapes.push_back(ProjektRectangle(200, 195, 3.14 * 0, { 0, 0 }, 2));
-        shapes.push_back(ProjektRectangle(200, 300, 3.14 * 0, { 0, 0 }, 2));
+        shapes.push_back(ProjektRectangle(200, 165, 3.14 * 0.001, { 0, 0 }, 2));
+        shapes.push_back(ProjektRectangle(200, 250, 3.14 * 0.0, { 0, 0 }, 2));
+        shapes.push_back(ProjektRectangle(200, 335, 3.14 * -0.001, { 0, 0 }, 2));
         for (UniversalConvexShape& ucs : shapes)
-            constraints.push_back(new ProjektConstraintPlane(ucs, { 0, 1 }, { 0, ar.GetBottom() }));
-        constraints.push_back(new ProjektConstraintNoPenetration(shapes[0], shapes[1]));
+        {
+            constraints.push_back(
+                std::make_shared<ProjektConstraintPlane>(ucs, Vector2f{ 0, 1 }, Vector2f{ 0, ar.GetBottom() }));
+            planeConstraints.push_back(std::static_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+        }
+        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[0], shapes[1]));
+        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[1], shapes[2]));
+        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[0], shapes[2]));
+        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[3]));
+        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[4]));
+        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[5]));
     }
 
     void demo2()
@@ -241,39 +239,60 @@ public:
         Triangle::gravity = gravity;
         is_robot = false;
         shapes.clear();
-        for (ProjektConstraint* c : constraints)
-            delete c;
         constraints.clear();
+        noPenetrationConstraints.clear();
+        planeConstraints.clear();
         UniversalConvexShape::gravity = { 0, gravity.Y };
-        shapes.push_back(ProjektRectangle(200, 200, 3.14 * 0.25, { 0, 0 }, 2));
-        shapes.push_back(ProjektRectangle(200, 300, 3.14 * 0, { 0, 0 }, 2));
+        shapes.push_back(ProjektRectangle(200, 150, 3.14 * 0.25, { 0, 0 }, 2));
+        shapes.push_back(ProjektRectangle(200, 300, 3.14 * 0.25, { 0, 0 }, 2));
         for (UniversalConvexShape& ucs : shapes)
-            constraints.push_back(new ProjektConstraintPlane(ucs, { 0, 1 }, { 0, ar.GetBottom() }));
-        constraints.push_back(new ProjektConstraintNoPenetration(shapes[0], shapes[1]));
+        {
+            constraints.push_back(std::make_shared<ProjektConstraintPlane>(
+                ProjektConstraintPlane(ucs, { 0, 1 }, { 0, ar.GetBottom() })));
+            planeConstraints.push_back(std::static_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+        }
+        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[0], shapes[1]));
+        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[2]));
     }
 
     void demo3()
     {
-        triangles.erase(triangles.begin(), triangles.end());
         Triangle::gravity = gravity;
         is_robot = false;
-        triangles.push_back(Triangle(PointF(250, 360), 50, 0, PointF(0.0, 0), 0));
-        triangles.push_back(Triangle(PointF(265, 200), 50, 0, PointF(0.0, 0), 0));
-        triangles.push_back(Triangle(PointF(233, 280), 50, 0, PointF(0.0, 0), 0));
+        shapes.clear();
+        constraints.clear();
+        noPenetrationConstraints.clear();
+        planeConstraints.clear();
+        UniversalConvexShape::gravity = { 0, gravity.Y };
+        shapes.push_back(ProjektRectangle(200, 210, 3.14 * 0.25, { 0, 0 }, 2));
+        shapes.push_back(ProjektRectangle(200, 320, 3.14 * 0, { 0, 0 }, 2));
+        for (UniversalConvexShape& ucs : shapes)
+        {
+            constraints.push_back(std::make_shared<ProjektConstraintPlane>(ucs, Vector2f{ 0, 1 }, Vector2f{ 0, ar.GetBottom() }));
+            planeConstraints.push_back(std::static_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+        }
+        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[0], shapes[1]));
+        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[2]));
     }
 
     void demo4()
     {
-        triangles.erase(triangles.begin(), triangles.end());
-        Triangle::gravity = gravity;
-        triangles.push_back(Triangle(PointF(50, 360), 25, 0, PointF(0.0, 0), 0));
-        triangles.push_back(Triangle(PointF(150, 360), 50, 0, PointF(0.0, 0), 0));
-        triangles.push_back(Triangle(PointF(250, 360), 25, 0, PointF(0.0, 0), 0));
-        
-        is_robot = true;
-        robot = new Robot();
-        stage = 0;
-        robot->set_tPosition({ 200, 200 });
+        is_robot = false;
+        shapes.clear();
+        constraints.clear();
+        noPenetrationConstraints.clear();
+        planeConstraints.clear();
+        UniversalConvexShape::gravity = { 0, gravity.Y/3 };
+        shapes.push_back(ProjektRectangle(200, 200, 3.14 * 0.001, { 0, 0.1 }, 2));
+        shapes.push_back(ProjektRectangle(200, 330, 3.14 * 0, { 0, -0.1 }, 2));
+        for (UniversalConvexShape& ucs : shapes)
+        {
+            constraints.push_back(
+                std::make_shared<ProjektConstraintPlane>(ucs, Vector2f{ 0, 1 }, Vector2f{ 0, ar.GetBottom() }));
+            planeConstraints.push_back(std::static_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+        }
+        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[0], shapes[1]));
+        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[2]));
     }
 
     inline void SetRobotArm1(REAL a)
@@ -385,8 +404,6 @@ public:
 
     ~AppState()
     {
-        for (ProjektConstraint* i : constraints)
-            delete i;
         if (is_robot) delete robot;
     }
 };
@@ -430,16 +447,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     std::chrono::steady_clock::time_point fps_start = sc.now();
     std::chrono::steady_clock::time_point one_loop_start = sc.now();
     std::chrono::steady_clock::time_point start_count = sc.now();
-    std::chrono::duration<REAL, std::milli> update_interval(1e-1);
+    std::chrono::milliseconds update_interval(5);
     do
     {
-        std::chrono::milliseconds dt(std::chrono::duration_cast<std::chrono::milliseconds>(sc.now() - one_loop_start));
+        std::chrono::microseconds dt(std::chrono::duration_cast<std::chrono::microseconds>(sc.now() - one_loop_start));
         if (dt > update_interval)
         {
             std::chrono::steady_clock::time_point temp = sc.now();
-            appState->update((dt.count() > 30)?30:dt.count());
-            spdlog::get("basic_logger")->info("period: {}ms, interval: {}ms", dt.count(), interval.count());
-            //appState->update(50);
+            float dt_ = (dt.count() > 20e3 ? 5.0f : float(dt.count()) * 0.25e-3);
+            appState->update(dt_);
+            //dbgmsg("period: {}us, interval: {}ms", dt.count(), interval.count());
             one_loop_start = temp;
         }
 
