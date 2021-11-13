@@ -7,7 +7,7 @@ public:
 	virtual float calcImpulse(float dt) = 0;
 	virtual void applyImpulse() = 0;
 	virtual void storeAccImpulse() = 0;
-	virtual void applyAccImpulse() = 0;
+	virtual float applyAccImpulse() = 0;
 };
 #endif
 

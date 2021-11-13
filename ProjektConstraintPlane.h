@@ -11,18 +11,26 @@ private:
 	UniversalConvexShape & ucs;
 	const Vector2f position, dir, tan;
 	bool active;
-	const float beta = 0.02, friction_coeff = 0.05;
+	static float beta;
 	Vector2f tmp_r;
-	std::vector<SubConstraint> subconstraints;
+	
 public:
-	ProjektConstraintPlane(UniversalConvexShape& _ucs, Vector2f _dir, Vector2f _pos) :
-		ucs(_ucs), dir(_dir), tan({ cross(dir, 1) }), position(_pos) {};
+	ProjektConstraintPlane(UniversalConvexShape& _ucs, const Vector2f& _dir, const Vector2f& _pos) :
+		ucs(_ucs), dir(_dir.normalized()), tan({ cross(dir, 1) }), position(_pos), active{ false } {};
 
+
+	static float borderZoneWidth, friction_coeff;
+
+	std::vector<SubConstraint> subconstraints;
 	struct SubConstraint
 	{
 		float ln, lt, accln, acclt, constraint_error;
 		int cp;
+		bool active;
 		Vector3f jt, jn;
+		SubConstraint(int cp_) :
+			ln{ 0 }, lt{ 0 }, jn{ 0, 0, 0 }, jt{ 0, 0, 0 },
+			accln{ 0 }, acclt{ 0 }, constraint_error{ 0 }, cp{ cp_ }, active{ true } {};
 	};
 
 	void activateImpulse() override;
@@ -33,6 +41,8 @@ public:
 	
 	void storeAccImpulse() override;
 	
-	void applyAccImpulse() override;
+	float applyAccImpulse() override;
+
+	Vector2f point_of_contact(const ProjektConstraintPlane::SubConstraint& sc) const;
 };
 

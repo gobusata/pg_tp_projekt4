@@ -1,5 +1,9 @@
 #include "ProjektConstraintNoPenetration.h"
 
+float ProjektConstraintNoPenetration::friction_coeff = 0.2;
+float ProjektConstraintNoPenetration::beta = 0.0000;
+float ProjektConstraintNoPenetration::borderZoneWidth = 7;
+
 ProjektConstraintNoPenetration::ProjektConstraintNoPenetration(UniversalConvexShape& _a, UniversalConvexShape& _b):
     a{ _a }, b{ _b }, minv_mat(6, 6), subconstraints{ 2 }
 {
@@ -10,9 +14,9 @@ ProjektConstraintNoPenetration::ProjektConstraintNoPenetration(UniversalConvexSh
     minv_mat(5, 5) = 1/b.inertia;
 }
 
-Vector2f ProjektConstraintNoPenetration::point_of_contact(const ProjektConstraintNoPenetration::SubConstraint& sc)
+Vector2f ProjektConstraintNoPenetration::point_of_contact(const ProjektConstraintNoPenetration::SubConstraint& sc) const
 {
-    assert(sc.tfa != ProjektConstraintNoPenetration::edge || sc.tfb != ProjektConstraintNoPenetration::edge);
+    //assert(sc.tfa != ProjektConstraintNoPenetration::edge || sc.tfb != ProjektConstraintNoPenetration::edge);
     if (sc.tfa == ProjektConstraintNoPenetration::vertex && sc.tfb == ProjektConstraintNoPenetration::vertex)
     {
         return 0.5 * (a.getVertexPos(sc.cpa[0]) + b.getVertexPos(sc.cpb[0]));
@@ -39,23 +43,24 @@ Vector2f ProjektConstraintNoPenetration::point_of_contact(const ProjektConstrain
     return { 0, 0 };
 
 }
+
 float ProjektConstraintNoPenetration::get_distance(const ProjektConstraintNoPenetration::SubConstraint& sc)
 {
     if (sc.tfa == ProjektConstraintNoPenetration::vertex && sc.tfb == ProjektConstraintNoPenetration::vertex)
     {
-        return sc.normal.dot(a.getVertexPos(sc.cpb[0])) - sc.normal.dot(b.getVertexPos(sc.cpa[0]));
+        return sc.normal.dot(b.getVertexPos(sc.cpb[0])) - sc.normal.dot(a.getVertexPos(sc.cpa[0]));
     }
     else if (sc.tfa == ProjektConstraintNoPenetration::edge && sc.tfb == ProjektConstraintNoPenetration::vertex)
     {
-        return sc.normal.dot(a.getVertexPos(sc.cpb[0])) - sc.normal.dot(b.getVertexPos(sc.cpa[0]));
+        return sc.normal.dot(b.getVertexPos(sc.cpb[0])) - sc.normal.dot(a.getVertexPos(sc.cpa[0]));
     }
     else if (sc.tfa == ProjektConstraintNoPenetration::vertex && sc.tfb == ProjektConstraintNoPenetration::edge)
     {
-        return sc.normal.dot(a.getVertexPos(sc.cpb[0])) - sc.normal.dot(b.getVertexPos(sc.cpa[0]));
+        return sc.normal.dot(b.getVertexPos(sc.cpb[0])) - sc.normal.dot(a.getVertexPos(sc.cpa[0]));
     }
     else if (sc.tfa == ProjektConstraintNoPenetration::edge && sc.tfb == ProjektConstraintNoPenetration::edge)
     {
-        return sc.normal.dot(a.getVertexPos(sc.cpb[0])) - sc.normal.dot(b.getVertexPos(sc.cpa[0]));
+        return sc.normal.dot( b.getVertexPos(sc.cpb[0]) - a.getVertexPos(sc.cpa[0]) );
     }
 }
 //
@@ -143,12 +148,13 @@ void ProjektConstraintNoPenetration::activateImpulse()
             if (intersection.bClosestFeature.size() == 2)
                 if (intersection.bClosestFeature[0].index == intersection.bClosestFeature[1].index)
                     intersection.bClosestFeature.pop_back();
-            //assert(intersection.aClosestFeature.size() != 2 || intersection.bClosestFeature.size() != 2);
+            
             ProjektConstraintNoPenetration::SubConstraint sc;
             if (intersection.aClosestFeature.size() == 2 && intersection.bClosestFeature.size() == 1)
             {
                 sc.normal = intersection.aClosestFeature[1] - intersection.aClosestFeature[0];
                 sc.normal = cross(cross(sc.normal, intersection.bClosestFeature[0] - intersection.aClosestFeature[0]), sc.normal);
+                sc.normal.normalize();
                 sc.tfa = ProjektConstraintNoPenetration::edge;
                 sc.tfb = ProjektConstraintNoPenetration::vertex;
                 sc.cpa[0] = intersection.aClosestFeature[0].index;
@@ -158,7 +164,8 @@ void ProjektConstraintNoPenetration::activateImpulse()
             else if (intersection.aClosestFeature.size() == 1 && intersection.bClosestFeature.size() == 2)
             {
                 sc.normal = intersection.bClosestFeature[1] - intersection.bClosestFeature[0];
-                sc.normal = -cross(cross(sc.normal, intersection.aClosestFeature[0] - intersection.bClosestFeature[0]), sc.normal);
+                sc.normal = cross(cross(sc.normal, intersection.bClosestFeature[0] - intersection.aClosestFeature[0]), sc.normal);
+                sc.normal.normalize();
                 sc.tfa = ProjektConstraintNoPenetration::vertex;
                 sc.tfb = ProjektConstraintNoPenetration::edge;
                 sc.cpa[0] = intersection.aClosestFeature[0].index;
@@ -168,64 +175,121 @@ void ProjektConstraintNoPenetration::activateImpulse()
             else if (intersection.aClosestFeature.size() == 1 && intersection.bClosestFeature.size() == 1)
             {
                 sc.normal = intersection.bClosestFeature[0] - intersection.aClosestFeature[0];
+                sc.normal.normalize();
                 sc.tfa = ProjektConstraintNoPenetration::vertex;
                 sc.tfb = ProjektConstraintNoPenetration::vertex;
                 sc.cpa[0] = intersection.aClosestFeature[0].index;
                 sc.cpb[0] = intersection.bClosestFeature[0].index;
             }
+            else if (intersection.aClosestFeature.size() == 2 && intersection.bClosestFeature.size() == 2)
+            {
+                sc.normal = intersection.bClosestFeature[1] - intersection.bClosestFeature[0];
+                sc.normal = cross(cross(sc.normal, intersection.bClosestFeature[0] - intersection.aClosestFeature[0]), sc.normal);
+                sc.normal.normalize();
+                sc.tfa = ProjektConstraintNoPenetration::edge;
+                sc.tfb = ProjektConstraintNoPenetration::edge;
+                sc.cpa[0] = intersection.aClosestFeature[0].index;
+                sc.cpa[1] = intersection.aClosestFeature[1].index;
+                sc.cpb[0] = intersection.bClosestFeature[0].index;
+                sc.cpb[1] = intersection.bClosestFeature[1].index;
+            }
 
-            //sc.constraint_error = 20 - intersection.distance;
-            //sc.valid = true;
-            //subconstraints[0] = sc;
-            if (intersection.distance < 20)
+            if (intersection.distance < borderZoneWidth)
+            {
                 active = true;
-            sc.valid = true;
-            for (ProjektConstraintNoPenetration::SubConstraint& sc : subconstraints)
-            {
-                if (sc.valid)
-                {
-                    float d = get_distance(sc);
-                    if (d > 30)
-                    {
-                        sc.valid = false;
-                    }
-                    else
-                    {
-                        sc.constraint_error = 20 - d;
-                    }
-                }
-            }
+                sc.valid = true;
+                sc.constraint_error = borderZoneWidth - intersection.distance;
 
-            ProjektConstraintNoPenetration::SubConstraint* sc_max_dis = &subconstraints[0];
-            for (ProjektConstraintNoPenetration::SubConstraint& sci : subconstraints) 
-            {
-                if (!sc.valid)
+                for (ProjektConstraintNoPenetration::SubConstraint& sci : subconstraints) 
                 {
-                    sc_max_dis = &sci;
-                    break;
+                    if (sc == sci || (point_of_contact(sc) - point_of_contact(sci)).norm() < 4*borderZoneWidth)
+                    {
+                        sci.valid = false;
+                        break;
+                    }
+                }   
+
+                for (ProjektConstraintNoPenetration::SubConstraint& sci : subconstraints)
+                {
+                    if (sci.valid)
+                    {
+                        float d = get_distance(sci);
+                        if (d > borderZoneWidth+2)
+                        {
+                            sci.valid = false;
+                        }
+                        else
+                        {
+                            sci.constraint_error = borderZoneWidth - d;
+                        }
+                    }
                 }
-                else if(sc_max_dis->constraint_error < sci.constraint_error)
+
+                //dbgmsg("sub1 valid = {}, sub2 valid = {}", subconstraints[0].valid, subconstraints[1].valid);
+                ProjektConstraintNoPenetration::SubConstraint* sc_max_dis = &subconstraints[0];
+                for (ProjektConstraintNoPenetration::SubConstraint& sci : subconstraints)
                 {
-                    if(!(sc == sci))
+                    if (!sci.valid)
+                    {
                         sc_max_dis = &sci;
+                        break;
+                    }
+                    else if (sc_max_dis->constraint_error > sci.constraint_error)
+                    {
+                        if (!(sc == sci))
+                            sc_max_dis = &sci;
+                    }
+                }
+                *sc_max_dis = sc;
+                if (subconstraints[0].valid)
+                {
+                    //dbgmsg("cp1 {}, distance = {}",
+                    //    point_of_contact(subconstraints[0]), get_distance(subconstraints[0]));
+                }
+                if (subconstraints[1].valid)
+                {
+                    //dbgmsg("cp2 {}, distance = {}",
+                    //    point_of_contact(subconstraints[1]), get_distance(subconstraints[1]));
                 }
             }
-            *sc_max_dis = sc;
-            //if (subconstraints[0].valid && subconstraints[1].valid)
-            if(true)
+            else
             {
-                spdlog::get("basic_logger")->info("cp1 {}, cp2 {}", 
-                    point_of_contact(subconstraints[0]), point_of_contact(subconstraints[1]));
+                if (active)
+                {
+                    active = false;
+                    for (ProjektConstraintNoPenetration::SubConstraint& sc : subconstraints)
+                        sc.valid = false;
+                }
             }
         }
         else
         {
             active = true;
+          /*  for (ProjektConstraintNoPenetration::SubConstraint& sci : subconstraints)
+            {
+                if (sci.valid)
+                {
+                    float d = get_distance(sci);
+                    if (d > borderZoneWidth)
+                    {
+                        sci.valid = false;
+                    }
+                    else
+                    {
+                        sci.constraint_error = borderZoneWidth - d;
+                    }
+                }
+            }*/
         }
     }
     else
     {
-        active = false;
+        if (active)
+        {
+            active = false;
+            for (ProjektConstraintNoPenetration::SubConstraint& sc : subconstraints)
+                sc.valid = false;
+        }
     }
 }
 
@@ -234,45 +298,36 @@ float ProjektConstraintNoPenetration::calcImpulse(float dt)
     float lambda_sum = 0;
     if (active)
     {
-        ProjektConstraintNoPenetration::SubConstraint sc;
         for (ProjektConstraintNoPenetration::SubConstraint& sc : subconstraints)
         {
-            Vector2f ra, rb;
-            Vector2f dir{ sc.normal }, tan{ cross(1, dir) };
-            ra = point_of_contact(sc) - a.pos;
-            rb = point_of_contact(sc) - b.pos;
+            if (sc.valid)
+            {
+             /*   Vector2f ra, rb;
+                Vector2f dir{ sc.normal }, tan{ cross(1, dir) };
+                ra = point_of_contact(sc) - a.pos;
+                rb = point_of_contact(sc) - b.pos;
 
-            sc.j_mat(0, 0) = dir[0];
-            sc.j_mat(0, 1) = dir[1];
-            sc.j_mat(0, 2) = dir[1] * ra[0] - dir[0] * ra[1];
-            sc.j_mat(0, 3) = -sc.j_mat(0, 0);
-            sc.j_mat(0, 4) = -sc.j_mat(0, 1);
-            sc.j_mat(0, 5) = dir[0] * rb[1] - dir[1] * rb[0];
-            sc.j_mat(1, 0) = tan[0];
-            sc.j_mat(1, 1) = tan[1];
-            sc.j_mat(1, 2) = tan[1] * ra[0] - tan[0] * ra[1];
-            sc.j_mat(1, 3) = -sc.j_mat(1, 0);
-            sc.j_mat(1, 4) = -sc.j_mat(1, 1);
-            sc.j_mat(1, 5) = tan[0] * rb[1] - tan[1] * rb[0];
+                sc.j_mat(0, 0) = dir[0];
+                sc.j_mat(0, 1) = dir[1];
+                sc.j_mat(0, 2) = dir[1] * ra[0] - dir[0] * ra[1];
+                sc.j_mat(0, 3) = -sc.j_mat(0, 0);
+                sc.j_mat(0, 4) = -sc.j_mat(0, 1);
+                sc.j_mat(0, 5) = dir[0] * rb[1] - dir[1] * rb[0];*/
+                
+                sc.ln = -1 / (sc.j_mat * minv_mat * sc.j_mat.transpose())(0, 0) *
+                    (sc.j_mat(0, 0) * a.vel(0) + sc.j_mat(0, 1) * a.vel(1) + sc.j_mat(0, 2) * a.omega +
+                        sc.j_mat(0, 3) * b.vel(0) + sc.j_mat(0, 4) * b.vel(1) + sc.j_mat(0, 5) * b.omega);
 
-            float cn, ct;
-            cn = sc.j_mat(0, 0) * a.vel[0] + sc.j_mat(0, 1) * a.vel[1] + sc.j_mat(0, 2) * a.omega
-                + sc.j_mat(0, 3) * b.vel[0] + sc.j_mat(0, 4) * b.vel[1] + sc.j_mat(0, 5) * b.omega
-                + sc.constraint_error / dt * beta;
-            ct = sc.j_mat(1, 0) * a.vel[0] + sc.j_mat(1, 1) * a.vel[1] + sc.j_mat(1, 2) * a.omega
-                + sc.j_mat(1, 3) * b.vel[0] + sc.j_mat(1, 4) * b.vel[1] + sc.j_mat(1, 5) * b.omega;
+                if (sc.acc_ln + sc.ln > 0)
+                    sc.ln = -sc.acc_ln;
 
-            Vector2f lambda = -(sc.j_mat * minv_mat * sc.j_mat.transpose()).inverse() * Vector2f { cn, ct };
-            sc.ln = lambda[0];
-            sc.lt = lambda[1];
-            //impulse clamping
-            if (sc.acc_ln + sc.ln > 0)
-                sc.ln = -sc.acc_ln;
+                sc.lt = 0;
 
-            sc.acc_ln += sc.ln;
-            sc.acc_lt += sc.lt;
+                sc.acc_ln += sc.ln;
+                sc.acc_lt += sc.lt;
 
-            lambda_sum += sc.ln * sc.ln + sc.lt * sc.lt;
+                lambda_sum += sc.ln * sc.ln + sc.lt * sc.lt;
+            }
         }
     }
    
@@ -285,14 +340,20 @@ void ProjektConstraintNoPenetration::applyImpulse()
     {
         for (ProjektConstraintNoPenetration::SubConstraint& sc : subconstraints)
         {
-            if (sc.ln < 0)
+            if (sc.valid)
             {
-                a.vel[0] += (sc.ln * sc.j_mat(0, 0) + sc.lt * sc.j_mat(1, 0)) / a.mass;
-                a.vel[1] += (sc.ln * sc.j_mat(0, 1) + sc.lt * sc.j_mat(1, 1)) / a.mass;
-                a.omega += (sc.ln * sc.j_mat(0, 2) + sc.lt * sc.j_mat(1, 2)) / a.inertia;
-                b.vel[0] += (sc.ln * sc.j_mat(0, 3) + sc.lt * sc.j_mat(1, 3)) / b.mass;
-                b.vel[1] += (sc.ln * sc.j_mat(0, 4) + sc.lt * sc.j_mat(1, 4)) / b.mass;
-                b.omega += (sc.ln * sc.j_mat(0, 5) + sc.lt * sc.j_mat(1, 5)) / b.inertia;
+                //a.vel[0] += (sc.ln * sc.j_mat(0, 0) + sc.lt * sc.j_mat(1, 0)) / a.mass;
+                //a.vel[1] += (sc.ln * sc.j_mat(0, 1) + sc.lt * sc.j_mat(1, 1)) / a.mass;
+                //a.omega += (sc.ln * sc.j_mat(0, 2) + sc.lt * sc.j_mat(1, 2)) / a.inertia;
+                //b.vel[0] += (sc.ln * sc.j_mat(0, 3) + sc.lt * sc.j_mat(1, 3)) / b.mass;
+                //b.vel[1] += (sc.ln * sc.j_mat(0, 4) + sc.lt * sc.j_mat(1, 4)) / b.mass;
+                //b.omega += (sc.ln * sc.j_mat(0, 5) + sc.lt * sc.j_mat(1, 5)) / b.inertia;
+                a.vel[0] += (sc.ln * sc.j_mat(0, 0))/a.mass;
+                a.vel[1] += (sc.ln * sc.j_mat(0, 1))/a.mass;
+                a.omega += (sc.ln * sc.j_mat(0, 2))/a.inertia;
+                b.vel[0] += (sc.ln * sc.j_mat(0, 3))/b.mass;
+                b.vel[1] += (sc.ln * sc.j_mat(0, 4))/b.mass;
+                b.omega += (sc.ln * sc.j_mat(0, 5))/b.inertia;
             }
         }
     }
@@ -300,19 +361,50 @@ void ProjektConstraintNoPenetration::applyImpulse()
 
 void ProjektConstraintNoPenetration::storeAccImpulse()
 {
-
-}
-
-void ProjektConstraintNoPenetration::applyAccImpulse()
-{
     if (active)
     {
         for (ProjektConstraintNoPenetration::SubConstraint& sc : subconstraints)
         {
-            sc.acc_ln = 0;
-            sc.acc_lt = 0;
+            if (sc.valid)
+            {
+                0;
+            }
         }
     }
+}
+
+float ProjektConstraintNoPenetration::applyAccImpulse()
+{
+    float ret = 0;
+    for (ProjektConstraintNoPenetration::SubConstraint& sc : subconstraints)
+    {
+        if (sc.valid)
+        {
+            Vector2f ra, rb;
+            Vector2f dir{ sc.normal }, tan{ cross(1, dir) };
+            ra = point_of_contact(sc) - a.pos;
+            rb = point_of_contact(sc) - b.pos;
+
+            sc.j_mat(0, 0) = dir[0];
+            sc.j_mat(0, 1) = dir[1];
+            sc.j_mat(0, 2) = dir[1] * ra[0] - dir[0] * ra[1];
+            sc.j_mat(0, 3) = -sc.j_mat(0, 0);
+            sc.j_mat(0, 4) = -sc.j_mat(0, 1);
+            sc.j_mat(0, 5) = dir[0] * rb[1] - dir[1] * rb[0];
+
+            a.vel[0] += (sc.acc_ln * sc.j_mat(0, 0)) / a.mass;
+            a.vel[1] += (sc.acc_ln * sc.j_mat(0, 1)) / a.mass;
+            a.omega += (sc.acc_ln * sc.j_mat(0, 2)) / a.inertia;
+            b.vel[0] += (sc.acc_ln * sc.j_mat(0, 3)) / b.mass;
+            b.vel[1] += (sc.acc_ln * sc.j_mat(0, 4)) / b.mass;
+            b.omega += (sc.acc_ln * sc.j_mat(0, 5)) / b.inertia;
+            ret = sc.acc_ln * sc.acc_ln + sc.acc_lt * sc.acc_lt;
+        }
+
+        //sc.acc_ln = 0;
+        //sc.acc_lt = 0;
+    }
+    return ret;
 }
 
 bool ProjektConstraintNoPenetration::eq(const ProjektConstraintNoPenetration::SubConstraint& a, const ProjektConstraintNoPenetration& b)
@@ -361,6 +453,5 @@ bool operator==(const ProjektConstraintNoPenetration::SubConstraint& a,
             }
         }
     }
-    else
-        return false;
+    return false;
 }

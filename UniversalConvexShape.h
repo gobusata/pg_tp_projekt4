@@ -73,9 +73,9 @@ public:
 	
 	VectorWithIndex() = default;
 
-	VectorWithIndex& operator=(const VectorWithIndex& a) = default;
+	//VectorWithIndex& operator=(const VectorWithIndex& a) = default;
 
-	VectorWithIndex(const VectorWithIndex& a) : Vector2f{ a }, index{ a.index } {};
+	//VectorWithIndex(const VectorWithIndex& a) : Vector2f{ a }, index{ a.index } {};
 
 	VectorWithIndex(int a, Vector2f b) : index{ a }, Vector2f{ b } {};
 	
@@ -110,8 +110,6 @@ struct Intersection
 		};
 	};
 	
-	//ClosestFeature closestFeature;
-
 	Intersection() : collision{ false }, distance(0), aClosestFeature{}, bClosestFeature{} {};
 	
 	Intersection(bool a);

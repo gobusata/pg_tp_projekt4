@@ -1,5 +1,5 @@
-#ifndef PROJEKT_TRIANGLE_H
-#define PROJEKT_TRIANGLE_H
+#ifndef _PROJEKT_TRIANGLE_H
+#define _PROJEKT_TRIANGLE_H
 
 #include "UniversalConvexShape.h"
 

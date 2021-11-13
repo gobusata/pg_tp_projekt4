@@ -58,7 +58,7 @@ void UniversalConvexShape::draw(Graphics* lpgraphics, Pen* lppen, Brush* lpbrush
 {
 	Gdiplus::Matrix matrix;
 	matrix.Translate(pos[0], pos[1]);
-	matrix.Rotate(this->rot*180/3.14, MatrixOrderPrepend);
+	matrix.Rotate(double(this->rot*180.0/3.14), MatrixOrderPrepend);
 	lpgraphics->SetTransform(&matrix);
 	if(lpbrush != nullptr)
 		lpgraphics->FillPath(lpbrush, &shape);
@@ -80,14 +80,13 @@ void UniversalConvexShape::createShape()
 	}
 
 	Vector2f v1{ *(vertices.end() - 1) }, v2{ vertices[0] };
-	v1 += 0 * v1.normalized();
-	v2 += 0 * v2.normalized();
+	v1 += 0.05 * v1.normalized();
+	v2 += 0.05 * v2.normalized();
 
 	shape.AddLine(v1[0], v1[1], v2[0], v2[1]);
 
 	this->sphere_bound = std::max_element(vertices.begin(), vertices.end(), \
 		[](Vector2f a, Vector2f b)->bool {return a.squaredNorm() < b.squaredNorm(); })->norm()*1.1;
-	//spdlog::get("basic_logger")->info("sphere_bound {}", sphere_bound);
 }
 
 void UniversalConvexShape::updateVel(float dt)
@@ -103,15 +102,11 @@ void UniversalConvexShape::updatePos(float dt)
 
 VectorWithIndex UniversalConvexShape::gjkSupportVer(const Vector2f& dir_) const 
 {
-	Affine2f trans1{};
-	trans1.setIdentity();
-	Vector2f dir{ dir_ };
-	dir = trans1.rotate(-rot).linear() * dir;
+	Vector2f dir{ Rotation2Df(-rot) * dir_ };
 	int index = std::max_element(vertices.begin(), vertices.end(), 
 		[dir](Vector2f a, Vector2f b)->bool{return dir.dot(a) < dir.dot(b); }) - vertices.begin();
-	trans1.setIdentity();
 	Vector2f ret = *(vertices.begin() + index);
-	return VectorWithIndex(index, pos + trans1.rotate(rot).linear() * ret);
+	return VectorWithIndex(index, pos + Rotation2Df(rot) * ret);
 }
 
 void UniversalConvexShape::collisionWithRect(const Gdiplus::RectF& rect, float dt)
@@ -122,7 +117,6 @@ void UniversalConvexShape::collisionWithRect(const Gdiplus::RectF& rect, float d
 		Vector2f penetration = intersection.point - Vector2f{0, rect.GetBottom()};
 		penetration[0] = 0;
 		penetration = penetration/dt;
-		//spdlog::get("basic_logger")->info("penetration: ({:.2f}, {:.2f})", penetration[0], penetration[1]);
 		collisionWithFixedObject(vel, omega, intersection.point - pos, penetration);
 		
 	}
@@ -146,11 +140,9 @@ Intersection UniversalConvexShape::collisionWithPlane(Vector2f position, Vector2
 	if (dir.dot(position) < dir.dot(pos) + sphere_bound)
 	{
 		VectorWithIndex supportVer = gjkSupportVer(dir);
-		//spdlog::get("basic_logger")->info("{} < {} + ({:.2f}, {:.2f})", dir.dot(position), dir.dot(pos), supportVer[0], supportVer[1]);
 		float tmp = dir.dot(supportVer) - dir.dot(position);
 		if (tmp > 0)
 		{
-			//pos -= tmp * dir;
 			return Intersection{ true, supportVer, dir };
 		}
 		else
@@ -281,17 +273,15 @@ Intersection gjkSimplex(const UniversalConvexShape& a,
 	simplex_vertices[1] = a.gjkSupportVer(dir);
 	simplex_vertices[4] = b.gjkSupportVer(-dir);
 	simplex[1] = simplex_vertices[1] - simplex_vertices[4];
-	if (dir.dot(simplex[1]) < 0)
+	//if (dir.dot(simplex[1]) < 0)
+	//{
+	//	return Intersection{ false, simplex[1].norm(), {simplex_vertices[1]}, {simplex_vertices[4]} };
+	//}
+	if (simplex_vertices[0] == simplex_vertices[1] && simplex_vertices[3] == simplex_vertices[4])
 	{
 		return Intersection{ false, simplex[1].norm(), {simplex_vertices[1]}, {simplex_vertices[4]} };
 	}
-
-	/*dir = cross(cross(simplex[1] - simplex[0], -simplex[0]), simplex[1] - simplex[0]);
-	dir.normalize();
-	simplex_vertices[2] = a.gjkSupportVer(dir);
-	simplex_vertices[5] = b.gjkSupportVer(-dir);
-	simplex[2] = simplex_vertices[2] - simplex_vertices[5];*/
-
+	assert(simplex_vertices[0] != simplex_vertices[1] || simplex_vertices[3] != simplex_vertices[4]);
 	while (true)
 	{
 		dir = cross(cross(simplex[1] - simplex[0], -simplex[0]), simplex[1] - simplex[0]);
@@ -321,7 +311,6 @@ Intersection gjkSimplex(const UniversalConvexShape& a,
 			}
 			return Intersection{ false, cs.distance,  aClosestFeature, bClosestFeature };
 		}
-
 
 		Vector3f coords = barycentricCoordinates3(simplex, Vector2f{ 0, 0 });
 
@@ -372,8 +361,6 @@ Intersection gjkSimplex(const UniversalConvexShape& a,
 			simplex_vertices[1] = simplex_vertices[2];
 			simplex_vertices[4] = simplex_vertices[5];
 		}
-
-		
 	}
 
 	return { true };
@@ -666,16 +653,30 @@ Intersection& Intersection::operator=(const Intersection& a)
 {
 	if (a.collision)
 	{
+		if (!collision)
+		{
+			aClosestFeature.~vector();
+			bClosestFeature.~vector();
+		}
 		collision = true;
 		point = a.point;
 		normal = a.normal;
 	}
 	else
 	{
+		
+		if (collision)
+		{
+			new(&aClosestFeature)std::vector<VectorWithIndex>{a.aClosestFeature};
+			new(&bClosestFeature)std::vector<VectorWithIndex>{a.bClosestFeature};
+		}
+		else
+		{
+			aClosestFeature = a.aClosestFeature;
+			bClosestFeature = a.bClosestFeature;
+		}
 		collision = false;
 		distance = a.distance;
-		aClosestFeature = a.aClosestFeature;
-		bClosestFeature = a.bClosestFeature;
 	}
 	return *this;
 }
