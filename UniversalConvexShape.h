@@ -5,8 +5,6 @@
 #include <gdiplus.h>
 #include <gdipluspath.h>
 #include <iostream>
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/basic_file_sink.h>
 #include <vector>
 #include <algorithm>
 #include <Eigen/dense>
@@ -14,6 +12,7 @@
 #include <gsl/gsl_linalg.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
+#undef max
 #include "ProjektLogs.h"
 
 using namespace Gdiplus;
@@ -24,10 +23,10 @@ struct VectorWithIndex;
 class UniversalConvexShape
 {
 public:
-	Vector2f pos, vel;
+	Vector3f pos, vel;
 	std::vector <Vector2f> vertices;
-	float mass, inertia, omega, rot, sphere_bound;
-	static Vector2f gravity;
+	float mass, inertia, sphere_bound;
+	static float gravity;
 	GraphicsPath shape;
 
 	void createShape();
@@ -48,22 +47,7 @@ public:
 	void updatePos(float dt);
 	
 	VectorWithIndex gjkSupportVer(const Vector2f&) const;
-	
-	void collisionWithRect(const Gdiplus::RectF& rect, float);
-	
-	Intersection collisionWithPlane(Vector2f position, Vector2f dir);
-	
-	/// <summary>
-	/// Calculates change of velocity of miving object coliding with fixed obstacle.
-	/// Uses mass and inertia of UniversaConvexShape instance it belogns to but does not change its velocity and ang. vel..
-	/// </summary>
-	/// <param name="vel">velocity of moving object</param>
-	/// <param name="omega">angular velocity of moving object</param>
-	/// <param name="r">vector from point of rotation of the moving object to the point of contact</param>
-	/// <param name="p">unused</param>
-	void collisionWithFixedObject(Vector2f& vel, float& omega, const Vector2f& r, const Vector2f& p);
-	
-	void collisionWithHorizontalPlane(Vector2f& vel, float& omega, const Vector2f& r, const Vector2f& p);
+
 };
 
 struct VectorWithIndex : public Vector2f
@@ -72,10 +56,6 @@ public:
 	int index;
 	
 	VectorWithIndex() = default;
-
-	//VectorWithIndex& operator=(const VectorWithIndex& a) = default;
-
-	//VectorWithIndex(const VectorWithIndex& a) : Vector2f{ a }, index{ a.index } {};
 
 	VectorWithIndex(int a, Vector2f b) : index{ a }, Vector2f{ b } {};
 	

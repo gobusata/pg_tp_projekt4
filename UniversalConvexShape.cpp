@@ -1,6 +1,6 @@
 #include "UniversalConvexShape.h"
 
-Vector2f UniversalConvexShape::gravity{ 0, 1e-5 };
+float UniversalConvexShape::gravity = 1e-5;
 
 float cross(const Vector2f& v1, const Vector2f& v2)
 {
@@ -20,16 +20,17 @@ Vector2f cross(float v1, const Vector2f& v2)
 template <typename T> int sgn(T val) {
 	return (T(0) < val) - (val < T(0));
 }
+
 template int sgn(float val);
 template int sgn(double val);
 
 UniversalConvexShape::UniversalConvexShape() :
-	pos(200, 200), vel(0, 0), vertices(), mass(1), inertia(100), omega(0),
-	rot(0), shape(FillModeWinding), sphere_bound(10) {}
+	pos(200, 200, 0), vel(0.f, 0.f, 0.f), vertices(), mass(1), inertia(100),
+	shape(FillModeWinding), sphere_bound(10) {}
 
 UniversalConvexShape::UniversalConvexShape(const UniversalConvexShape& ucs) :
 	pos(ucs.pos), vel(ucs.vel), vertices(ucs.vertices), mass(ucs.mass),
-		inertia(ucs.inertia), omega(ucs.omega), rot(ucs.rot), shape(ucs.shape.GetFillMode()), sphere_bound(ucs.sphere_bound)
+		inertia(ucs.inertia), shape(ucs.shape.GetFillMode()), sphere_bound(ucs.sphere_bound)
 
 {
 	PointF* points = new PointF[ucs.shape.GetPointCount()]();
@@ -46,19 +47,19 @@ Vector2f UniversalConvexShape::getTransformedVertex(int i)
 {
 	Affine2f trans1{};
 	trans1.setIdentity();
-	return trans1.rotate(rot).linear() * vertices[i];
+	return trans1.rotate(pos(2)).linear() * vertices[i];
 }
 
 Vector2f UniversalConvexShape::getVertexPos(int i)
 {
-return pos + getTransformedVertex(i);
+return pos.head<2>() + getTransformedVertex(i);
 }
 
 void UniversalConvexShape::draw(Graphics* lpgraphics, Pen* lppen, Brush* lpbrush)
 {
 	Gdiplus::Matrix matrix;
 	matrix.Translate(pos[0], pos[1]);
-	matrix.Rotate(double(this->rot*180.0/3.14), MatrixOrderPrepend);
+	matrix.Rotate(double(this->pos(2)*180.0/3.14), MatrixOrderPrepend);
 	lpgraphics->SetTransform(&matrix);
 	if(lpbrush != nullptr)
 		lpgraphics->FillPath(lpbrush, &shape);
@@ -80,8 +81,8 @@ void UniversalConvexShape::createShape()
 	}
 
 	Vector2f v1{ *(vertices.end() - 1) }, v2{ vertices[0] };
-	v1 += 0.05 * v1.normalized();
-	v2 += 0.05 * v2.normalized();
+	v1 += 0.0 * v1.normalized();
+	v2 += 0.0 * v2.normalized();
 
 	shape.AddLine(v1[0], v1[1], v2[0], v2[1]);
 
@@ -91,69 +92,21 @@ void UniversalConvexShape::createShape()
 
 void UniversalConvexShape::updateVel(float dt)
 {
-	vel = vel + gravity * dt;
+	vel = vel + Vector3f( 0.f, gravity, 0.f ) *dt;
 }
 
 void UniversalConvexShape::updatePos(float dt)
 {
 	pos = pos + vel * dt;
-	rot = rot + omega * dt;
 }
 
 VectorWithIndex UniversalConvexShape::gjkSupportVer(const Vector2f& dir_) const 
 {
-	Vector2f dir{ Rotation2Df(-rot) * dir_ };
+	Vector2f dir{ Rotation2Df(-pos(2)) * dir_ };
 	int index = std::max_element(vertices.begin(), vertices.end(), 
 		[dir](Vector2f a, Vector2f b)->bool{return dir.dot(a) < dir.dot(b); }) - vertices.begin();
 	Vector2f ret = *(vertices.begin() + index);
-	return VectorWithIndex(index, pos + Rotation2Df(rot) * ret);
-}
-
-void UniversalConvexShape::collisionWithRect(const Gdiplus::RectF& rect, float dt)
-{
-	Intersection intersection = collisionWithPlane({ 0, rect.GetBottom() }, { 0, 1 });
-	if (intersection.collision)
-	{
-		Vector2f penetration = intersection.point - Vector2f{0, rect.GetBottom()};
-		penetration[0] = 0;
-		penetration = penetration/dt;
-		collisionWithFixedObject(vel, omega, intersection.point - pos, penetration);
-		
-	}
-	intersection = collisionWithPlane({ rect.GetLeft() , 0}, { -1, 0 });
-	if (intersection.collision)
-	{
-		collisionWithFixedObject(vel, omega, intersection.point - pos, { 0, 0 });
-	}
-	intersection = collisionWithPlane({ rect.GetRight(), 0 }, { 1, 0 });
-	if (intersection.collision)
-	{
-		collisionWithFixedObject(vel, omega, intersection.point - pos, { 0, 0 });
-	}
-	
-}
-
-Intersection UniversalConvexShape::collisionWithPlane(Vector2f position, Vector2f dir)
-{
-	dir.normalize();
-	
-	if (dir.dot(position) < dir.dot(pos) + sphere_bound)
-	{
-		VectorWithIndex supportVer = gjkSupportVer(dir);
-		float tmp = dir.dot(supportVer) - dir.dot(position);
-		if (tmp > 0)
-		{
-			return Intersection{ true, supportVer, dir };
-		}
-		else
-		{
-			return Intersection{ false, abs(tmp), {}, {} };
-		}
-	}
-	else
-	{
-		return Intersection{ false, 1e9, {}, {} };
-	}
+	return VectorWithIndex(index, Vector2f{ pos(0), pos(1) } + Rotation2Df(pos(2)) * ret);
 }
 
 //Intersection gjkSimplex(const UniversalConvexShape& a,
@@ -261,7 +214,7 @@ Intersection gjkSimplex(const UniversalConvexShape& a,
 	std::vector<Vector2f> simplex{ 3 };
 	VectorWithIndex simplex_vertices[6];
 
-	Vector2f dir(b.pos - a.pos);
+	Vector2f dir(b.pos.head<2>() - a.pos.head<2>());
 	dir.normalize();
 	simplex_vertices[0] = a.gjkSupportVer(dir);
 	simplex_vertices[3] = b.gjkSupportVer(-dir);
@@ -366,140 +319,6 @@ Intersection gjkSimplex(const UniversalConvexShape& a,
 	return { true };
 }
 
-void UniversalConvexShape::collisionWithFixedObject(Vector2f& vel, float& omega, const Vector2f& r, const Vector2f& p)
-{
-	MatrixXf matrix(5, 5);
-	matrix << 
-		mass, 0, 0, -1, 0,
-		0, mass, 0, 0, -1,
-		0, 0, inertia, r[1], -r[0],
-		1, 0, -r[1], 0, 0,
-		0, 1, r[0], 0, 0;
-	MatrixXf rhs(5, 1), lhs(5, 1);
-	//rhs << mass * vel[0], mass* vel[1], inertia* omega, -p[0], -p[1];
-	rhs << mass * vel[0], mass* vel[1], inertia* omega, 0, 0;
-	lhs = matrix.householderQr().solve(rhs);
-
-	Vector2f momentum_change(lhs(3), lhs(4));
-	if (r.dot(momentum_change) < 0)
-	{
-		vel[0] = lhs(0);
-		vel[1] = lhs(1);
-		omega = lhs(2);
-	}
-}
-
-void UniversalConvexShape::collisionWithHorizontalPlane(Vector2f& vel, float& omega, const Vector2f& r, const Vector2f& p)
-{
-	MatrixXf matrix(3, 3);
-	matrix <<
-		mass, 0, -1,
-		0, inertia, -r[0],
-		1, r[0], 0;
-	MatrixXf rhs(3, 1), lhs(3, 1);
-	rhs << mass * vel[1], inertia* omega, 0;
-	lhs = matrix.householderQr().solve(rhs);
-
-
-	if (r.dot(Vector2f{ 0, lhs(2) }) < 0)
-	//if(true)
-	{
-		vel[1] = lhs(0);
-		omega = lhs(1);
-	}
-}
-
-void collisionWithMovingObjectSol(float mass1, float inertia1, Vector2f& vel1, float& omega1, Vector2f r1,
-	float mass2, float inertia2, Vector2f& vel2, float& omega2, Vector2f r2)
-{
-	gsl_matrix* equations = gsl_matrix_alloc(8, 8);
-	gsl_vector* yvector = gsl_vector_alloc(8);
-	gsl_vector* xvector = gsl_vector_alloc(8);
-
-	gsl_matrix_set_zero(equations);
-	gsl_matrix_set(equations, 0, 0, mass1); gsl_matrix_set(equations, 0, 6, -1);
-	gsl_matrix_set(equations, 1, 1, mass1); gsl_matrix_set(equations, 1, 7, -1);
-	gsl_matrix_set(equations, 2, 2, mass2); gsl_matrix_set(equations, 2, 6, 1);
-	gsl_matrix_set(equations, 3, 3, mass2); gsl_matrix_set(equations, 3, 7, 1);
-	gsl_matrix_set(equations, 4, 4, -inertia1); gsl_matrix_set(equations, 4, 6, -r1[1]); gsl_matrix_set(equations, 4, 7, r1[0]);
-	gsl_matrix_set(equations, 5, 5, -inertia2); gsl_matrix_set(equations, 5, 6, r2[1]); gsl_matrix_set(equations, 5, 7, -r2[0]);
-	gsl_matrix_set(equations, 6, 0, 1); gsl_matrix_set(equations, 6, 2, -1); gsl_matrix_set(equations, 6, 4, -r1[1]); gsl_matrix_set(equations, 6, 5, r2[1]);
-	gsl_matrix_set(equations, 7, 1, 1); gsl_matrix_set(equations, 7, 3, -1); gsl_matrix_set(equations, 7, 4, r1[0]); gsl_matrix_set(equations, 7, 5, -r2[0]);
-
-	gsl_vector_set(yvector, 0, mass1 * vel1[0]);
-	gsl_vector_set(yvector, 1, mass1 * vel1[1]);
-	gsl_vector_set(yvector, 2, mass2 * vel2[0]);
-	gsl_vector_set(yvector, 3, mass2 * vel2[1]);
-	gsl_vector_set(yvector, 4, -inertia1 * omega1);
-	gsl_vector_set(yvector, 5, -inertia2 * omega2);
-	gsl_vector_set(yvector, 6, 0);
-	gsl_vector_set(yvector, 7, 0);
-
-	gsl_vector* tau = gsl_vector_alloc(8);
-
-	gsl_linalg_QR_decomp(equations, tau);
-	gsl_linalg_QR_solve(equations, tau, yvector, xvector);
-
-	Vector2f delta_momentum(0, 0);
-	delta_momentum[0] = gsl_vector_get(xvector, 6);
-	delta_momentum[1] = gsl_vector_get(xvector, 7);
-
-	if (delta_momentum.dot(r2 - r1) > 0)
-	{
-		vel1[0] = gsl_vector_get(xvector, 0);
-		vel1[1] = gsl_vector_get(xvector, 1);
-		vel2[0]= gsl_vector_get(xvector, 2);
-		vel2[1] = gsl_vector_get(xvector, 3);
-		omega1 = gsl_vector_get(xvector, 4);
-		omega2 = gsl_vector_get(xvector, 5);
-	}
-
-	gsl_matrix_free(equations);
-	gsl_vector_free(xvector);
-	gsl_vector_free(yvector);
-	gsl_vector_free(tau);
-}
-
-//void collisionWithMovingObjectSol(float mass1, float inertia1, Vector2f& vel1, float& omega1, Vector2f r1,
-//	float mass2, float inertia2, Vector2f& vel2, float& omega2, Vector2f r2)
-//{
-//	MatrixXf equations(6, 6);
-//	equations <<
-//		mass1, 0, 0, 0, -1, 0,
-//		0, mass1, 0, 0, 0, -1,
-//		0, 0, mass2, 0, 1, 0,
-//		0, 0, 0, mass2, 0, 1,
-//		1, 0, -1, 0, 0, 0,
-//		0, 1, 0, -1, 0, 0;
-//
-//	MatrixXf yvector(6, 1), xvector(6, 1);
-//	yvector << mass1 * vel1[0], mass1* vel1[1], mass2* vel2[0], mass2* vel2[1], 0, 0;
-//	xvector = equations.householderQr().solve(yvector);
-//
-//	Vector2f delta_momentum(xvector(4), xvector(5));
-//
-//	if (delta_momentum.dot(r2 - r1))
-//	{
-//		vel1[0] = xvector(0);
-//		vel1[1] = xvector(1);
-//		vel2[0] = xvector(2);
-//		vel2[1] = xvector(3);
-//	}
-//
-//}
-
-void collisionWithMovingObject(UniversalConvexShape& a, UniversalConvexShape& b)
-{
-	Intersection intersection;
-	if (collisionDetectionWide(a, b))
-		intersection = gjkSimplex(a, b);
-	if (intersection.collision)
-	{
-		collisionWithMovingObjectSol(a.mass, a.inertia, a.vel, a.omega, intersection.point - a.pos,
-			b.mass, b.inertia, b.vel, b.omega, intersection.point - b.pos);
-	}
-}
-
 Vector2f barycentricCoordinates2(std::vector<Vector2f> line, Vector2f p)
 {
 	Vector2f n = line[1] - line[0];
@@ -595,7 +414,7 @@ ClosestFeature pointToLine(std::vector<Vector2f> line, const Vector2f& p)
 
 bool collisionDetectionWide(const UniversalConvexShape& a, const UniversalConvexShape& b)
 {
-	if (a.sphere_bound + b.sphere_bound > (a.pos - b.pos).norm())
+	if (a.sphere_bound + b.sphere_bound > (a.pos.head<2>() - b.pos.head<2>()).norm())
 		return true;
 	else
 		return false;
