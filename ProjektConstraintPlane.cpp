@@ -1,19 +1,21 @@
 #include "ProjektConstraintPlane.h"
 
-float ProjektConstraintPlane::borderZoneWidth = 5;
+float ProjektConstraintPlane::borderZoneWidth = 2.0f;
 float ProjektConstraintPlane::beta = 0.00;
 float ProjektConstraintPlane::friction_coeff = 0.5;
+bool ProjektConstraintPlane::warm_start = false;
 
 using SubConstraint = ProjektConstraintPlane::SubConstraint;
 
+
 void ProjektConstraintPlane::activateImpulse()
 {
-	Rotation2Df trans1{ Rotation2Df(ucs.rot) };	
+	Rotation2Df trans1{ Rotation2Df(ucs.pos(2)) };	
 	std::vector<float> t1(ucs.vertices.size());
 	std::transform(ucs.vertices.begin(), ucs.vertices.end(), t1.begin(),
 		[this, &trans1](Vector2f v)->float
 		{
-			return dir.dot(position - ucs.pos - trans1 * v) - borderZoneWidth;
+			return dir.dot(position - Vector2f{ ucs.pos(0), ucs.pos(1) } - trans1 * v) - borderZoneWidth;
 		}
 	);
 
@@ -55,58 +57,65 @@ void ProjektConstraintPlane::activateImpulse()
 	else active = false;
 }
 
-float ProjektConstraintPlane::calcImpulse(float dt)
+
+float ProjektConstraintPlane::calcImpulse(SubConstraint & sc, float dt)
 {
+	float error = 0;
 	if (active)
 	{
-		float impulse_squared = 0;
-		for (ProjektConstraintPlane::SubConstraint& sc : subconstraints)
+		if (sc.active)
 		{
-			if (sc.active)
-			{
-				Vector2f r{ ucs.getTransformedVertex(sc.cp) };
-				sc.jn = { dir.x(), dir.y(), r.x() * dir.y() - r.y() * dir.x() };
-				sc.ln = -1 / (sc.jn(0) * sc.jn(0) / ucs.mass + sc.jn(1) * sc.jn(1) / ucs.mass + sc.jn(2) * sc.jn(2) / ucs.inertia) *
-					(sc.jn(0) * ucs.vel(0) + sc.jn(1) * ucs.vel(1) + sc.jn(2) * ucs.omega + sc.constraint_error / dt * beta);
-				if (sc.accln + sc.ln > 0)
-					sc.ln = -sc.accln;
-				sc.accln += sc.ln;
+			Vector2f r{ ucs.getTransformedVertex(sc.cp) };
+			sc.jn = { dir.x(), dir.y(), r.x() * dir.y() - r.y() * dir.x() };
+			sc.ln = -1 / (sc.jn(0) * sc.jn(0) / ucs.mass + sc.jn(1) * sc.jn(1) / ucs.mass + sc.jn(2) * sc.jn(2) / ucs.inertia) *
+				(sc.jn(0) * ucs.vel(0) + sc.jn(1) * ucs.vel(1) + sc.jn(2) * ucs.vel(2) + sc.constraint_error / dt * beta);
+			if (sc.accln + sc.ln > 0)
+				sc.ln = -sc.accln;
+			sc.accln += sc.ln;
 
-				sc.jt = { tan.x(), tan.y(), r.x() * tan.y() - r.y() * tan.x() };
-				sc.lt = -1 / (sc.jt(0) * sc.jt(0) / ucs.mass + sc.jt(1) * sc.jt(1) / ucs.mass + sc.jt(2) * sc.jt(2) / ucs.inertia) *
-					(sc.jt(0) * ucs.vel(0) + sc.jt(1) * ucs.vel(1) + sc.jt(2) * ucs.omega);
+			sc.jt = { tan.x(), tan.y(), r.x() * tan.y() - r.y() * tan.x() };
+			sc.lt = -1 / (sc.jt(0) * sc.jt(0) / ucs.mass + sc.jt(1) * sc.jt(1) / ucs.mass + sc.jt(2) * sc.jt(2) / ucs.inertia) *
+				(sc.jt(0) * ucs.vel(0) + sc.jt(1) * ucs.vel(1) + sc.jt(2) * ucs.vel(2));
 				
-				if (sc.accln >= 0)
-					sc.lt = -sc.acclt;
-				sc.lt = 0;
-				sc.acclt += sc.lt;
+			if (sc.accln >= 0)
+				sc.lt = -sc.acclt;
+			sc.lt = 0;
+			sc.acclt += sc.lt;
 
-				impulse_squared += sc.ln * sc.ln + sc.lt * sc.lt;
-			}
+			if (sc.accln != 0)
+				error = std::max(error, abs(sc.ln / sc.accln));
+			if (sc.acclt != 0)
+				error = std::max(error, abs(sc.lt / sc.acclt));
 		}
-		return impulse_squared;
 	}
-	return 0.0f;
+	return error;
 }
 
 
-
-
-
-void ProjektConstraintPlane::applyImpulse()
+void ProjektConstraintPlane::applyImpulse(SubConstraint & sc)
 {
 	if (active)
 	{
-		for (ProjektConstraintPlane::SubConstraint& sc : subconstraints)
+		if (sc.active)
 		{
-			if (sc.active)
-			{
-				ucs.vel += (sc.ln * Vector2f{ sc.jn(0), sc.jn(1) } + sc.lt * Vector2f{ sc.jt(0), sc.jt(1) }) / ucs.mass;
-				ucs.omega += (sc.ln * sc.jn(2) + sc.lt * sc.jt(2)) / ucs.inertia;
-			}
+			ucs.vel(0) += (sc.ln * sc.jn(0) + sc.lt * sc.jt(0)) / ucs.mass;
+			ucs.vel(1) += (sc.ln * sc.jn(1) + sc.lt * sc.jt(1)) / ucs.mass;
+			ucs.vel(2) += (sc.ln * sc.jn(2) + sc.lt * sc.jt(2)) / ucs.inertia;
 		}
 	}
 }
+
+float ProjektConstraintPlane::calcApplyImpulse(float dt)
+{
+	float error = 0;
+	for (SubConstraint& sc : subconstraints)
+	{
+		error = std::max(calcImpulse(sc, dt), error);
+		applyImpulse(sc);
+	}
+	return error;
+}
+
 
 void ProjektConstraintPlane::storeAccImpulse() 
 {
@@ -116,36 +125,41 @@ void ProjektConstraintPlane::storeAccImpulse()
 		{
 			if (sc.active)
 			{
-				0;
+				float c = sc.jn(0) * ucs.vel(0) + sc.jn(1) * ucs.vel(1) + sc.jn(2) * ucs.vel(2);
+				//dbgmsg("ProjektConstraintPlane: constraint address = {} subconstraint = {}, c = {}",
+				//	static_cast<void*>(this), static_cast<void*>(&sc), c);
 			}
 		}
 	}
 }
-	
+
 
 float ProjektConstraintPlane::applyAccImpulse() 
 {
-	float ret = 0;
 	for (ProjektConstraintPlane::SubConstraint& sc : subconstraints)
 	{
 		if (sc.active)
 		{
-			dbgmsg("sc.cp = {:.2f} sc.jn = {:.2f}, subconstraints.size() = {}", 
-				sc.cp, sc.jn, subconstraints.size());
-			//warm start
-			ucs.vel += (sc.accln * Vector2f{ sc.jn(0), sc.jn(1) } + sc.acclt * Vector2f{ sc.jt(0), sc.jt(1) }) / ucs.mass;
-			ucs.omega += (sc.accln * sc.jn(2) + sc.acclt * sc.jt(2)) / ucs.inertia;
-			ret += sc.accln * sc.accln + sc.acclt * sc.acclt;
+			if (warm_start)
+			{
+				dbgmsg("sc.cp = {:.2f} sc.jn = {:.2f}, subconstraints.size() = {}", 
+					sc.cp, sc.jn, subconstraints.size());
+				ucs.vel(0) += (sc.accln * sc.jn(0) + sc.acclt * sc.jt(0)) / ucs.mass;
+				ucs.vel(1) += (sc.accln * sc.jn(1) + sc.acclt * sc.jt(1)) / ucs.mass;
+				ucs.vel(2) += (sc.accln * sc.jn(2) + sc.acclt * sc.jt(2)) / ucs.inertia;
+			}
+			else
+			{
+				sc.accln = 0;
+				sc.acclt = 0;
+			}
 		}
-		// reseting accumulated impulse from previous timepoint
-		//sc.accln = 0;
-		//sc.acclt = 0;	
 	}
-
-	return ret;
+	return 1;
 }
 
-Vector2f ProjektConstraintPlane::point_of_contact(const ProjektConstraintPlane::SubConstraint& sc) const
+
+Vector2f ProjektConstraintPlane::pointOfContact(const ProjektConstraintPlane::SubConstraint& sc) const
 {
 	return ucs.getVertexPos(sc.cp);
 }

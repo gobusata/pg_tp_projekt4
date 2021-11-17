@@ -1,8 +1,9 @@
 #include "ProjektConstraintNoPenetration.h"
 
-float ProjektConstraintNoPenetration::friction_coeff = 0.2;
-float ProjektConstraintNoPenetration::beta = 0.0000;
-float ProjektConstraintNoPenetration::borderZoneWidth = 7;
+float ProjektConstraintNoPenetration::friction_coeff = 0.2f;
+float ProjektConstraintNoPenetration::beta = 0.0000f;
+float ProjektConstraintNoPenetration::borderZoneWidth = 3.0f;
+bool ProjektConstraintNoPenetration::warm_start = false;
 
 ProjektConstraintNoPenetration::ProjektConstraintNoPenetration(UniversalConvexShape& _a, UniversalConvexShape& _b):
     a{ _a }, b{ _b }, minv_mat(6, 6), subconstraints{ 2 }
@@ -14,7 +15,7 @@ ProjektConstraintNoPenetration::ProjektConstraintNoPenetration(UniversalConvexSh
     minv_mat(5, 5) = 1/b.inertia;
 }
 
-Vector2f ProjektConstraintNoPenetration::point_of_contact(const ProjektConstraintNoPenetration::SubConstraint& sc) const
+Vector2f ProjektConstraintNoPenetration::pointOfContact(const ProjektConstraintNoPenetration::SubConstraint& sc) const
 {
     //assert(sc.tfa != ProjektConstraintNoPenetration::edge || sc.tfb != ProjektConstraintNoPenetration::edge);
     if (sc.tfa == ProjektConstraintNoPenetration::vertex && sc.tfb == ProjektConstraintNoPenetration::vertex)
@@ -44,7 +45,7 @@ Vector2f ProjektConstraintNoPenetration::point_of_contact(const ProjektConstrain
 
 }
 
-float ProjektConstraintNoPenetration::get_distance(const ProjektConstraintNoPenetration::SubConstraint& sc)
+float ProjektConstraintNoPenetration::getDistance(const ProjektConstraintNoPenetration::SubConstraint& sc)
 {
     if (sc.tfa == ProjektConstraintNoPenetration::vertex && sc.tfb == ProjektConstraintNoPenetration::vertex)
     {
@@ -58,7 +59,7 @@ float ProjektConstraintNoPenetration::get_distance(const ProjektConstraintNoPene
     {
         return sc.normal.dot(b.getVertexPos(sc.cpb[0])) - sc.normal.dot(a.getVertexPos(sc.cpa[0]));
     }
-    else if (sc.tfa == ProjektConstraintNoPenetration::edge && sc.tfb == ProjektConstraintNoPenetration::edge)
+    else//if (sc.tfa == ProjektConstraintNoPenetration::edge && sc.tfb == ProjektConstraintNoPenetration::edge)
     {
         return sc.normal.dot( b.getVertexPos(sc.cpb[0]) - a.getVertexPos(sc.cpa[0]) );
     }
@@ -202,7 +203,7 @@ void ProjektConstraintNoPenetration::activateImpulse()
 
                 for (ProjektConstraintNoPenetration::SubConstraint& sci : subconstraints) 
                 {
-                    if (sc == sci || (point_of_contact(sc) - point_of_contact(sci)).norm() < 4*borderZoneWidth)
+                    if (sc == sci || (pointOfContact(sc) - pointOfContact(sci)).norm() < 4*borderZoneWidth)
                     {
                         sci.valid = false;
                         break;
@@ -213,7 +214,7 @@ void ProjektConstraintNoPenetration::activateImpulse()
                 {
                     if (sci.valid)
                     {
-                        float d = get_distance(sci);
+                        float d = getDistance(sci);
                         if (d > borderZoneWidth+2)
                         {
                             sci.valid = false;
@@ -293,70 +294,59 @@ void ProjektConstraintNoPenetration::activateImpulse()
     }
 }
 
-float ProjektConstraintNoPenetration::calcImpulse(float dt)
+float ProjektConstraintNoPenetration::calcImpulse(SubConstraint & sc, float dt)
 {   
-    float lambda_sum = 0;
+    float error = 0;
     if (active)
     {
-        for (ProjektConstraintNoPenetration::SubConstraint& sc : subconstraints)
-        {
-            if (sc.valid)
-            {
-             /*   Vector2f ra, rb;
-                Vector2f dir{ sc.normal }, tan{ cross(1, dir) };
-                ra = point_of_contact(sc) - a.pos;
-                rb = point_of_contact(sc) - b.pos;
+        if (sc.valid)
+        {                
+            sc.ln = -1 / (sc.j_mat * minv_mat * sc.j_mat.transpose())(0, 0) *
+                (sc.j_mat(0, 0) * a.vel(0) + sc.j_mat(0, 1) * a.vel(1) + sc.j_mat(0, 2) * a.vel(2) +
+                    sc.j_mat(0, 3) * b.vel(0) + sc.j_mat(0, 4) * b.vel(1) + sc.j_mat(0, 5) * b.vel(2));
 
-                sc.j_mat(0, 0) = dir[0];
-                sc.j_mat(0, 1) = dir[1];
-                sc.j_mat(0, 2) = dir[1] * ra[0] - dir[0] * ra[1];
-                sc.j_mat(0, 3) = -sc.j_mat(0, 0);
-                sc.j_mat(0, 4) = -sc.j_mat(0, 1);
-                sc.j_mat(0, 5) = dir[0] * rb[1] - dir[1] * rb[0];*/
-                
-                sc.ln = -1 / (sc.j_mat * minv_mat * sc.j_mat.transpose())(0, 0) *
-                    (sc.j_mat(0, 0) * a.vel(0) + sc.j_mat(0, 1) * a.vel(1) + sc.j_mat(0, 2) * a.omega +
-                        sc.j_mat(0, 3) * b.vel(0) + sc.j_mat(0, 4) * b.vel(1) + sc.j_mat(0, 5) * b.omega);
+            if (sc.acc_ln + sc.ln > 0)
+                sc.ln = -sc.acc_ln;
 
-                if (sc.acc_ln + sc.ln > 0)
-                    sc.ln = -sc.acc_ln;
+            sc.lt = 0;
 
-                sc.lt = 0;
+            sc.acc_ln += sc.ln;
+            sc.acc_lt += sc.lt;
 
-                sc.acc_ln += sc.ln;
-                sc.acc_lt += sc.lt;
-
-                lambda_sum += sc.ln * sc.ln + sc.lt * sc.lt;
-            }
+            if (sc.acc_ln != 0)
+                error = std::max(error, abs(sc.ln / sc.acc_ln));
+            if (sc.acc_lt != 0)
+                error = std::max(error, abs(sc.lt / sc.acc_lt));
         }
     }
-   
-    return lambda_sum;
+    return error;
 }
 
-void ProjektConstraintNoPenetration::applyImpulse()
+void ProjektConstraintNoPenetration::applyImpulse(SubConstraint & sc)
 {
     if (active)
     {
-        for (ProjektConstraintNoPenetration::SubConstraint& sc : subconstraints)
+        if (sc.valid)
         {
-            if (sc.valid)
-            {
-                //a.vel[0] += (sc.ln * sc.j_mat(0, 0) + sc.lt * sc.j_mat(1, 0)) / a.mass;
-                //a.vel[1] += (sc.ln * sc.j_mat(0, 1) + sc.lt * sc.j_mat(1, 1)) / a.mass;
-                //a.omega += (sc.ln * sc.j_mat(0, 2) + sc.lt * sc.j_mat(1, 2)) / a.inertia;
-                //b.vel[0] += (sc.ln * sc.j_mat(0, 3) + sc.lt * sc.j_mat(1, 3)) / b.mass;
-                //b.vel[1] += (sc.ln * sc.j_mat(0, 4) + sc.lt * sc.j_mat(1, 4)) / b.mass;
-                //b.omega += (sc.ln * sc.j_mat(0, 5) + sc.lt * sc.j_mat(1, 5)) / b.inertia;
-                a.vel[0] += (sc.ln * sc.j_mat(0, 0))/a.mass;
-                a.vel[1] += (sc.ln * sc.j_mat(0, 1))/a.mass;
-                a.omega += (sc.ln * sc.j_mat(0, 2))/a.inertia;
-                b.vel[0] += (sc.ln * sc.j_mat(0, 3))/b.mass;
-                b.vel[1] += (sc.ln * sc.j_mat(0, 4))/b.mass;
-                b.omega += (sc.ln * sc.j_mat(0, 5))/b.inertia;
-            }
+            a.vel[0] += (sc.ln * sc.j_mat(0, 0))/a.mass;
+            a.vel[1] += (sc.ln * sc.j_mat(0, 1))/a.mass;
+            a.vel(2) += (sc.ln * sc.j_mat(0, 2))/a.inertia;
+            b.vel[0] += (sc.ln * sc.j_mat(0, 3))/b.mass;
+            b.vel[1] += (sc.ln * sc.j_mat(0, 4))/b.mass;
+            b.vel(2) += (sc.ln * sc.j_mat(0, 5))/b.inertia;
         }
     }
+}
+
+float ProjektConstraintNoPenetration::calcApplyImpulse(float dt)
+{
+    float error = 0.0f;
+    for (SubConstraint& sc : subconstraints)
+    {
+        calcImpulse(sc, dt);
+        applyImpulse(sc);
+    }
+    return 0.0f;
 }
 
 void ProjektConstraintNoPenetration::storeAccImpulse()
@@ -367,7 +357,10 @@ void ProjektConstraintNoPenetration::storeAccImpulse()
         {
             if (sc.valid)
             {
-                0;
+                float c = sc.j_mat(0, 0) * a.vel(0) + sc.j_mat(0, 1) * a.vel(1) + sc.j_mat(0, 2) * a.vel(2) +
+                    sc.j_mat(0, 3) * b.vel(0) + sc.j_mat(0, 4) * b.vel(1) + sc.j_mat(0, 5) * b.vel(2);
+             /*   dbgmsg("ProjektConstraintNoPenetration: constraint address = {} subconstraint = {}, c = {}",
+                    static_cast<void*>(this), static_cast<void*>(&sc), c);*/
             }
         }
     }
@@ -375,15 +368,14 @@ void ProjektConstraintNoPenetration::storeAccImpulse()
 
 float ProjektConstraintNoPenetration::applyAccImpulse()
 {
-    float ret = 0;
     for (ProjektConstraintNoPenetration::SubConstraint& sc : subconstraints)
     {
         if (sc.valid)
         {
             Vector2f ra, rb;
             Vector2f dir{ sc.normal }, tan{ cross(1, dir) };
-            ra = point_of_contact(sc) - a.pos;
-            rb = point_of_contact(sc) - b.pos;
+            ra = pointOfContact(sc) - Vector2f{ a.pos(0), a.pos(1) };
+            rb = pointOfContact(sc) - Vector2f{ b.pos(0), b.pos(1) };
 
             sc.j_mat(0, 0) = dir[0];
             sc.j_mat(0, 1) = dir[1];
@@ -392,19 +384,23 @@ float ProjektConstraintNoPenetration::applyAccImpulse()
             sc.j_mat(0, 4) = -sc.j_mat(0, 1);
             sc.j_mat(0, 5) = dir[0] * rb[1] - dir[1] * rb[0];
 
-            a.vel[0] += (sc.acc_ln * sc.j_mat(0, 0)) / a.mass;
-            a.vel[1] += (sc.acc_ln * sc.j_mat(0, 1)) / a.mass;
-            a.omega += (sc.acc_ln * sc.j_mat(0, 2)) / a.inertia;
-            b.vel[0] += (sc.acc_ln * sc.j_mat(0, 3)) / b.mass;
-            b.vel[1] += (sc.acc_ln * sc.j_mat(0, 4)) / b.mass;
-            b.omega += (sc.acc_ln * sc.j_mat(0, 5)) / b.inertia;
-            ret = sc.acc_ln * sc.acc_ln + sc.acc_lt * sc.acc_lt;
+            if (warm_start)
+            {
+                a.vel[0] += (sc.acc_ln * sc.j_mat(0, 0)) / a.mass;
+                a.vel[1] += (sc.acc_ln * sc.j_mat(0, 1)) / a.mass;
+                a.vel(2) += (sc.acc_ln * sc.j_mat(0, 2)) / a.inertia;
+                b.vel[0] += (sc.acc_ln * sc.j_mat(0, 3)) / b.mass;
+                b.vel[1] += (sc.acc_ln * sc.j_mat(0, 4)) / b.mass;
+                b.vel(2) += (sc.acc_ln * sc.j_mat(0, 5)) / b.inertia;
+            }
+            else
+            {
+                sc.acc_ln = 0;
+                sc.acc_lt = 0;
+            }
         }
-
-        //sc.acc_ln = 0;
-        //sc.acc_lt = 0;
     }
-    return ret;
+    return 1;
 }
 
 bool ProjektConstraintNoPenetration::eq(const ProjektConstraintNoPenetration::SubConstraint& a, const ProjektConstraintNoPenetration& b)

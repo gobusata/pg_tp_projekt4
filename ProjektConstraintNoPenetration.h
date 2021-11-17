@@ -14,16 +14,16 @@ private:
     UniversalConvexShape &a, &b;
     MatrixXf minv_mat;
     static float friction_coeff, beta, borderZoneWidth;
+    static bool warm_start;
     bool shapes_in_close_proximity, active;
     Intersection intersection;
-
-    float get_distance(const ProjektConstraintNoPenetration::SubConstraint& sc);
+    float getDistance(const ProjektConstraintNoPenetration::SubConstraint& sc);
 
 public:
 
     ProjektConstraintNoPenetration(UniversalConvexShape& _a, UniversalConvexShape & _b);
 
-    Vector2f point_of_contact(const ProjektConstraintNoPenetration::SubConstraint& sc) const;
+    Vector2f pointOfContact(const ProjektConstraintNoPenetration::SubConstraint& sc) const;
 
     
 
@@ -48,13 +48,15 @@ public:
 
     void activateImpulse() override;
 
-    float calcImpulse(float dt) override;
-    
-    void applyImpulse() override;
+    float calcApplyImpulse(float dt) override;
     
     void storeAccImpulse() override;
     
     float applyAccImpulse() override;
+
+    float calcImpulse(SubConstraint & sc, float dt);
+
+    void applyImpulse(SubConstraint & sc);
 };
 
 bool operator==(const ProjektConstraintNoPenetration::SubConstraint& a,
