@@ -21,8 +21,6 @@ using namespace Gdiplus;
 #include "ProjektConstraintPlane.h"
 #include "ProjektConstraintNoPenetration.h"
 #include "UniversalConvexShape.h"
-#include "ProjektRectangle.h"
-#include "ProjektTriangle.h"
 
 #pragma comment(lib, "gdiplus.lib")
 
@@ -42,7 +40,7 @@ INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
 void myOnPaint(HDC&, AppState*);
 
 // button size
-const int BUTTON_WIDTH = 100, BUTTON_HEIGHT = 30;
+const SIZE BTN_SIZE{ 110, 40 }, PADDING = { 2, 2 };
 
 HWND m_hwnd;
 BOOL end = FALSE;
@@ -53,8 +51,7 @@ private:
     //gravity
     PointF gravity{ 0, 5e-4 };
 
-    std::vector<Triangle> triangles;
-    std::vector<UniversalConvexShape> shapes;
+    std::vector<ProjektConvexBody> shapes;
     std::vector<std::shared_ptr<ProjektConstraint>> constraints;
     std::vector<std::shared_ptr<ProjektConstraintNoPenetration>> noPenetrationConstraints;
     std::vector<std::shared_ptr<ProjektConstraintPlane>> planeConstraints;
@@ -68,8 +65,8 @@ public:
     //pens and brushes in basic colors
     std::vector<Pen*> pens;
     SolidBrush redBrush, greenBrush, blueBrush, whiteBrush, blackBrush;
-    Pen redPen, greenPen, bluePen, whitePen;
-
+    Pen redPen, greenPen, bluePen, whitePen, blackPen;
+    bool pause_simulation = false;
     //rects
     Rect client_rect;
     //animation rect
@@ -104,12 +101,13 @@ public:
     AppState():
         //initialize pens and brushes
         redBrush(Color(215, 20, 20)), greenBrush(Color(20, 215, 20)), blueBrush(Color(20, 20, 215)), whiteBrush(Color(200, 200, 200)), blackBrush(Color(0, 0, 0)),
-        redPen(&redBrush, 2), greenPen(&greenBrush, 2), bluePen(&blueBrush, 2), whitePen(&whiteBrush, 2),
-        pens{ &redPen, &greenPen, &bluePen },
+        redPen(&redBrush, 2), greenPen(&greenBrush, 2), bluePen(&blueBrush, 2), whitePen(&whiteBrush, 2), blackPen(&blackBrush, 1),
+        pens{ &redPen, &greenPen, &bluePen, &blackPen },
         //initialize rects
         client_rect(0, 0, 750, 530), ar(10, 10, 480, 370),
         list_box_trajectory(), shapes_intersection{}
     {
+        dbginit();
         for (auto & p : pens)
         {
             p->SetLineCap(LineCapRound, LineCapRound, DashCapRound);
@@ -121,31 +119,40 @@ public:
         
         graphics->DrawRectangle(&bluePen, ar);
         graphics->FillRectangle(&whiteBrush, ar);
-        for (auto tri : triangles)
-        {
-            tri.draw(graphics, &greenPen);
-        }
 
         for (PointF p: collision_points)
         {
-            graphics->FillRectangle(&this->blackBrush, p.X, p.Y, 5., 5.);
+            graphics->FillRectangle(&this->blackBrush, (REAL)p.X - 2.5, (REAL)p.Y - 2.5, (REAL)5., (REAL)5.);
         }
 
-        //graphics->FillRectangle(&this->blackBrush, round(shapes_intersection.x()), round(shapes_intersection.y()), 5., 5.);
-
-        for (UniversalConvexShape& s : shapes)
+        for (ProjektConvexBody& s : shapes)
         {
             s.draw(graphics, &bluePen, nullptr);
         }
 
         for (std::shared_ptr<const ProjektConstraintNoPenetration>  con : noPenetrationConstraints)
         {
+            switch (con->intersection.simpstate)
+            {
+            case GjkSimplex::line:
+                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[0]), ev2gp(con->intersection.simplex_vertices[1]));
+                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[3]), ev2gp(con->intersection.simplex_vertices[4]));
+                break;
+            case GjkSimplex::triangle:
+                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[0]), ev2gp(con->intersection.simplex_vertices[1]));
+                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[1]), ev2gp(con->intersection.simplex_vertices[2]));
+                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[2]), ev2gp(con->intersection.simplex_vertices[0]));
+                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[3]), ev2gp(con->intersection.simplex_vertices[4]));
+                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[4]), ev2gp(con->intersection.simplex_vertices[5]));
+                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[5]), ev2gp(con->intersection.simplex_vertices[3]));
+                break;
+            }
             for (const ProjektConstraintNoPenetration::SubConstraint& sc : con->subconstraints)
             {
-                if (sc.valid)
+                if (sc.active)
                 {
-                    Vector2f tmp{ con->point_of_contact(sc) };
-                    graphics->FillRectangle(&this->blackBrush, round(tmp[0]), round(tmp[1]), 3., 3.);
+                    Vector2f tmp{ con->pointOfContact(sc) };
+                    graphics->FillRectangle(&this->redBrush, (REAL)tmp[0] - 1.5, (REAL)tmp[1] - 1.5, (REAL)3., (REAL)3.);
                 }
             }
         }
@@ -156,43 +163,56 @@ public:
             {
                 if (sc.active)
                 {
-                    Vector2f tmp{ con->point_of_contact(sc) };
-                    graphics->FillRectangle(&this->redBrush, round(tmp[0]), round(tmp[1]), 3., 3.);
+                    Vector2f tmp{ con->pointOfContact(sc) };
+                    graphics->FillRectangle(&this->redBrush, (REAL)tmp[0] - 1.5, (REAL)tmp[1] - 1.5, (REAL)3., (REAL)3.);
                 }
             }
         }
-
         if (is_robot) robot->draw(graphics);
-
     }
 
     void update(REAL dt)
     {
-        for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
+        for (std::vector<ProjektConvexBody>::iterator s = shapes.begin(); s != shapes.end(); s++)
             s->updateVel(dt);
-        float lambda_sum_all = 0, lambda_sum;
+        float error = 0;
         int i = 0;
         for (std::vector<std::shared_ptr<ProjektConstraint>>::iterator c = constraints.begin(); c != constraints.end(); c++)
             (*c)->activateImpulse();
         for (std::shared_ptr<ProjektConstraint> & c : constraints)
-            lambda_sum_all += c->applyAccImpulse();
-        for (i= 0; i<80; i++)
+           c->applyAccImpulse();
+        for (i= 0; i<20; i++)
         {
-            lambda_sum = 0;
+            error = 0;
             for (std::vector<std::shared_ptr<ProjektConstraint>>::iterator c = constraints.begin(); c != constraints.end(); c++)
-                lambda_sum += (*c)->calcImpulse(dt);
-            for (std::vector<std::shared_ptr<ProjektConstraint>>::iterator c = constraints.begin(); c != constraints.end(); c++)
-                (*c)->applyImpulse();
-            lambda_sum_all += lambda_sum;
-            if (lambda_sum_all == 0) break;
-            if (lambda_sum_all * 0.01 > lambda_sum && lambda_sum < 1e-9)
+                error = max((*c)->calcApplyImpulse(dt), error);
+            if (i >= 79)
+            {
+                dbgmsg("NoPenetrationConstraints:");
+                for (auto coni : noPenetrationConstraints)
+                {
+                    for (auto sci : coni->subconstraints)
+                    {
+                        dbgmsg("j_mat = {}", sci.jmat);
+                    }
+                }
+                dbgmsg("PlaneConstraints:");
+                for (auto coni : planeConstraints)
+                {
+                    for (auto sci : coni->subconstraints)
+                    {
+                        dbgmsg("j_mat = {}", sci.jn);
+                    }
+                }
+            }
+            if (error < 0.05)
                 break;
         }
         if (i > 0)
-            dbgmsg("Number of loops: {}\t\t sum lambda = {:.4e}", i, lambda_sum_all);
+            dbgmsg("Number of loops: {}\t\t error = {:.4e}", i, error);
         for (std::vector<std::shared_ptr<ProjektConstraint>>::iterator c = constraints.begin(); c != constraints.end(); c++)
             (*c)->storeAccImpulse();
-        for (std::vector<UniversalConvexShape>::iterator s = shapes.begin(); s != shapes.end(); s++)
+        for (std::vector<ProjektConvexBody>::iterator s = shapes.begin(); s != shapes.end(); s++)
             s->updatePos(dt);
         
         if (is_robot)
@@ -201,98 +221,117 @@ public:
             if (run_script) script(dt);
         }
        
-        if (shapes.size() == 2)
-        {
-            
-        }
     }
 
     void demo1()
     {
-        is_robot = false;
-
         shapes.clear();
-        noPenetrationConstraints.clear();
         constraints.clear();
-        noPenetrationConstraints.clear();
         planeConstraints.clear();
-        UniversalConvexShape::gravity = { 0, gravity.Y };
-        shapes.push_back(ProjektRectangle(200, 165, 3.14 * 0.001, { 0, 0 }, 2));
-        shapes.push_back(ProjektRectangle(200, 250, 3.14 * 0.0, { 0, 0 }, 2));
-        shapes.push_back(ProjektRectangle(200, 335, 3.14 * -0.001, { 0, 0 }, 2));
-        for (UniversalConvexShape& ucs : shapes)
+        noPenetrationConstraints.clear();
+        gravity.Y = ProjektConvexBody::gravity;
+        //shapes.push_back(ProjektConvexBody(Vector3f{ 260, ar.GetBottom() - 21, 0 }, Vector3f{ 0, 0, 0 },
+        //    std::vector<Vector2f>({ Vector2f{ 20.00, 0.00 }, Vector2f{ 18.48, 7.65 }, Vector2f{ 14.14, 14.14 }, Vector2f{ 7.65, 18.48 }, 
+        //        Vector2f{ -0.00, 20.00 }, Vector2f{ -7.65, 18.48 }, Vector2f{ -14.14, 14.14 }, Vector2f{ -18.48, 7.65 }, 
+        //        Vector2f{ -20.00, -0.00 }, Vector2f{ -18.48, -7.65 }, Vector2f{ -14.14, -14.14 }, Vector2f{ -7.65, -18.48 }, 
+        //        Vector2f{ 0.00, -20.00 }, Vector2f{ 7.65, -18.48 }, Vector2f{ 14.14, -14.14 } }),
+        //    1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 300, ar.GetBottom() - 41, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{20, 40}, Vector2f{-20, 40}, Vector2f{-20, -40}, Vector2f{20, -40} }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 300, ar.GetBottom() - 100, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{40, 5}, Vector2f{40, -5}, Vector2f{-40, -5}, Vector2f{-40, 5} }), 1.f, 1.f));
+        for (std::vector<ProjektConvexBody>::iterator pcb1 = shapes.begin(); pcb1 != shapes.end(); pcb1++)
         {
-            constraints.push_back(
-                std::make_shared<ProjektConstraintPlane>(ucs, Vector2f{ 0, 1 }, Vector2f{ 0, ar.GetBottom() }));
-            planeConstraints.push_back(std::static_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+            constraints.push_back(std::make_shared<ProjektConstraintPlane>(*pcb1, Vector2f{ 0.f , 1.f }, Vector2f{ 0.5*(ar.GetLeft() + ar.GetRight()), ar.GetBottom() }));
+            planeConstraints.push_back(std::reinterpret_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+            for (auto pcb2 = pcb1+1; pcb2 != shapes.end(); pcb2++)
+                constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(*pcb1, *pcb2));
         }
-        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[0], shapes[1]));
-        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[1], shapes[2]));
-        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[0], shapes[2]));
-        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[3]));
-        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[4]));
-        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[5]));
+
     }
 
     void demo2()
     {
-        Triangle::gravity = gravity;
-        is_robot = false;
         shapes.clear();
         constraints.clear();
-        noPenetrationConstraints.clear();
         planeConstraints.clear();
-        UniversalConvexShape::gravity = { 0, gravity.Y };
-        shapes.push_back(ProjektRectangle(200, 150, 3.14 * 0.25, { 0, 0 }, 2));
-        shapes.push_back(ProjektRectangle(200, 300, 3.14 * 0.25, { 0, 0 }, 2));
-        for (UniversalConvexShape& ucs : shapes)
+        noPenetrationConstraints.clear();
+        gravity.Y = ProjektConvexBody::gravity;
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 42, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 124, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 206, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 170, ar.GetBottom() - 22, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 20, 20 }, Vector2f{ -20, 20 }, Vector2f{ -20, -20 }, Vector2f{ 20, -20 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 170, ar.GetBottom() - 64, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 20, 20 }, Vector2f{ -20, 20 }, Vector2f{ -20, -20 }, Vector2f{ 20, -20 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 170, ar.GetBottom() - 106, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 20, 20 }, Vector2f{ -20, 20 }, Vector2f{ -20, -20 }, Vector2f{ 20, -20 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 220, ar.GetBottom() - 12, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 220, ar.GetBottom() - 34, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 220, ar.GetBottom() - 56, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 300, ar.GetBottom() - 56, 0 }, Vector3f{ -0.3, -0.3, 0 },
+            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
+        for (std::vector<ProjektConvexBody>::iterator pcb1 = shapes.begin(); pcb1 != shapes.end(); pcb1++)
         {
-            constraints.push_back(std::make_shared<ProjektConstraintPlane>(
-                ProjektConstraintPlane(ucs, { 0, 1 }, { 0, ar.GetBottom() })));
-            planeConstraints.push_back(std::static_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+            constraints.push_back(std::make_shared<ProjektConstraintPlane>(*pcb1, Vector2f{ 0.f , 1.f }, Vector2f{ 0.5 * (ar.GetLeft() + ar.GetRight()), ar.GetBottom() }));
+            planeConstraints.push_back(std::reinterpret_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+            for (auto pcb2 = pcb1 + 1; pcb2 != shapes.end(); pcb2++)
+                constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(*pcb1, *pcb2));
         }
-        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[0], shapes[1]));
-        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[2]));
     }
 
     void demo3()
     {
-        Triangle::gravity = gravity;
-        is_robot = false;
         shapes.clear();
         constraints.clear();
-        noPenetrationConstraints.clear();
         planeConstraints.clear();
-        UniversalConvexShape::gravity = { 0, gravity.Y };
-        shapes.push_back(ProjektRectangle(200, 210, 3.14 * 0.25, { 0, 0 }, 2));
-        shapes.push_back(ProjektRectangle(200, 320, 3.14 * 0, { 0, 0 }, 2));
-        for (UniversalConvexShape& ucs : shapes)
+        noPenetrationConstraints.clear();
+        gravity.Y = ProjektConvexBody::gravity;
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 42, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 126, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 210, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
+        for (std::vector<ProjektConvexBody>::iterator pcb1 = shapes.begin(); pcb1 != shapes.end(); pcb1++)
         {
-            constraints.push_back(std::make_shared<ProjektConstraintPlane>(ucs, Vector2f{ 0, 1 }, Vector2f{ 0, ar.GetBottom() }));
-            planeConstraints.push_back(std::static_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+            constraints.push_back(std::make_shared<ProjektConstraintPlane>(*pcb1, Vector2f{ 0.f , 1.f }, Vector2f{ 0.5 * (ar.GetLeft() + ar.GetRight()), ar.GetBottom() }));
+            planeConstraints.push_back(std::reinterpret_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+            for (auto pcb2 = pcb1 + 1; pcb2 != shapes.end(); pcb2++)
+                constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(*pcb1, *pcb2));
+            
         }
-        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[0], shapes[1]));
-        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[2]));
     }
 
     void demo4()
     {
-        is_robot = false;
         shapes.clear();
         constraints.clear();
-        noPenetrationConstraints.clear();
         planeConstraints.clear();
-        UniversalConvexShape::gravity = { 0, gravity.Y/3 };
-        shapes.push_back(ProjektRectangle(200, 200, 3.14 * 0.001, { 0, 0.1 }, 2));
-        shapes.push_back(ProjektRectangle(200, 330, 3.14 * 0, { 0, -0.1 }, 2));
-        for (UniversalConvexShape& ucs : shapes)
+        noPenetrationConstraints.clear();
+        gravity.Y = ProjektConvexBody::gravity;
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 40, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 134, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
+        for (std::vector<ProjektConvexBody>::iterator pcb1 = shapes.begin(); pcb1 != shapes.end(); pcb1++)
         {
-            constraints.push_back(
-                std::make_shared<ProjektConstraintPlane>(ucs, Vector2f{ 0, 1 }, Vector2f{ 0, ar.GetBottom() }));
-            planeConstraints.push_back(std::static_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+            constraints.push_back(std::make_shared<ProjektConstraintPlane>(*pcb1, Vector2f{ 0.f , 1.f }, Vector2f{ 0.5 * (ar.GetLeft() + ar.GetRight()), ar.GetBottom() }));
+            planeConstraints.push_back(std::reinterpret_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+            for (auto pcb2 = pcb1 + 1; pcb2 != shapes.end(); pcb2++)
+            {
+                std::shared_ptr<ProjektConstraintNoPenetration> pcnp = std::make_shared<ProjektConstraintNoPenetration>(*pcb1, *pcb2);
+                constraints.push_back(pcnp);
+                noPenetrationConstraints.push_back(pcnp);
+            }
+                
         }
-        constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(shapes[0], shapes[1]));
-        noPenetrationConstraints.push_back(std::static_pointer_cast<ProjektConstraintNoPenetration>(constraints[2]));
     }
 
     inline void SetRobotArm1(REAL a)
@@ -330,10 +369,7 @@ public:
         {
             if (robot->catched_triangle == nullptr)
             {
-                for (int i = 0; i < triangles.size(); i++)
-                {
-                    robot->catch_triangle(&triangles[i]);
-                }
+
             }
             else
             {
@@ -455,7 +491,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         {
             std::chrono::steady_clock::time_point temp = sc.now();
             float dt_ = (dt.count() > 20e3 ? 5.0f : float(dt.count()) * 0.25e-3);
-            appState->update(dt_);
+            if(!appState->pause_simulation)
+              appState->update(dt_);
             //dbgmsg("period: {}us, interval: {}ms", dt.count(), interval.count());
             one_loop_start = temp;
         }
@@ -483,7 +520,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     delete appState;
     GdiplusShutdown(token);
-
     return (int) msg.wParam;
 }
 
@@ -529,34 +565,42 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
 {
    hInst = hInstance; // Store instance handle in our global variable
 
-
-   DWORD ws_style = WS_CLIPCHILDREN | WS_OVERLAPPED | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU | WS_CAPTION | WS_VISIBLE | WS_BORDER ;
+   DWORD ws_style = WS_CLIPCHILDREN | WS_OVERLAPPED | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU | WS_CAPTION | WS_VISIBLE | WS_BORDER;
    Rect window_rect(appstate->client_rect);
    AdjustWindowRectEx(reinterpret_cast<LPRECT>(&window_rect), ws_style, TRUE, WS_EX_OVERLAPPEDWINDOW);
-
+   //appstate->client_rect.Offset(window_rect.GetLeft(), window_rect.GetTop());
 
    m_hwnd = CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, szWindowClass, szTitle, ws_style,
-      CW_USEDEFAULT, CW_USEDEFAULT, window_rect.GetRight() - window_rect.GetLeft() + 10, window_rect.GetBottom() - window_rect.GetTop(),
+      CW_USEDEFAULT, CW_USEDEFAULT, window_rect.GetRight() - window_rect.GetLeft(), window_rect.GetBottom() - window_rect.GetTop(),
        nullptr, nullptr, hInstance, reinterpret_cast<void*>(appstate));
 
+   GetClientRect(m_hwnd, reinterpret_cast<LPRECT>(&appstate->client_rect));
+   appstate->ar = RectF{ REAL(appstate->client_rect.GetLeft()+PADDING.cx), REAL(appstate->client_rect.GetTop()+PADDING.cy),
+       REAL(appstate->client_rect.GetRight() - appstate->client_rect.GetLeft() - 2*PADDING.cx - 2*BTN_SIZE.cx),
+       REAL(appstate->client_rect.GetBottom() - 2 * BTN_SIZE.cy - appstate->client_rect.GetTop() - 2 * PADDING.cy)};
+
    CreateWindow(WC_BUTTON, TEXT("&demo 1"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->client_rect.GetLeft(), appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft(), appstate->client_rect.GetBottom()-2*BTN_SIZE.cy+PADDING.cy,
+       BTN_SIZE.cx-2*PADDING.cx, BTN_SIZE.cy-2*PADDING.cy,
        m_hwnd, (HMENU)ID_DEMO1, hInstance, NULL);
    
    CreateWindow(WC_BUTTON, TEXT("demo 2"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH, appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft()+BTN_SIZE.cx, appstate->client_rect.GetBottom() - 2 * BTN_SIZE.cy + PADDING.cy,
+       BTN_SIZE.cx - 2 * PADDING.cx, BTN_SIZE.cy - 2 * PADDING.cy,
        m_hwnd, (HMENU)ID_DEMO2, hInstance, NULL);
    
    CreateWindow(WC_BUTTON, TEXT("demo 3"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH*2, appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft()+2*BTN_SIZE.cx, appstate->client_rect.GetBottom() - 2 * BTN_SIZE.cy + PADDING.cy,
+       BTN_SIZE.cx - 2 * PADDING.cx, BTN_SIZE.cy - 2 * PADDING.cy,
        m_hwnd, (HMENU)ID_DEMO3, hInstance, NULL);
    
    CreateWindow(WC_BUTTON, TEXT("demo 4"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH*3, appstate->ar.GetBottom(), BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft()+3*BTN_SIZE.cx, appstate->client_rect.GetBottom() - 2 * BTN_SIZE.cy + PADDING.cy,
+       BTN_SIZE.cx - 2 * PADDING.cx, BTN_SIZE.cy - 2 * PADDING.cy,
        m_hwnd, (HMENU)ID_DEMO4, hInstance, NULL);
 
    HWND hwnd = CreateWindowEx(NULL, TRACKBAR_CLASS, TEXT("robot control 1"), WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS,
-       appstate->client_rect.GetLeft(), appstate->ar.GetBottom() + BUTTON_HEIGHT, 2 * BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft(), appstate->ar.GetBottom() + BTN_SIZE.cy, 2 * BTN_SIZE.cx, BTN_SIZE.cy,
        m_hwnd, (HMENU)ID_ROBOT1, hInstance, NULL);
 
    SendMessage(hwnd, TBM_SETRANGE, TRUE, MAKELPARAM(0, 180));
@@ -564,48 +608,42 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow, AppState* appstate)
    SendMessage(hwnd, TBM_SETTICFREQ, 10, 0);
 
    hwnd = CreateWindowEx(NULL, TRACKBAR_CLASS, TEXT("robot control 2"), WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS,
-       appstate->client_rect.GetLeft() + 2*BUTTON_WIDTH, appstate->ar.GetBottom() + BUTTON_HEIGHT, 2 * BUTTON_WIDTH, BUTTON_HEIGHT,
+       appstate->client_rect.GetLeft() + 2*BTN_SIZE.cx, appstate->ar.GetBottom() + BTN_SIZE.cy, 2 * BTN_SIZE.cx, BTN_SIZE.cy,
        m_hwnd, (HMENU)ID_ROBOT2, hInstance, NULL);
 
    SendMessage(hwnd, TBM_SETRANGE, TRUE, MAKELPARAM(0, 360));
    SendMessage(hwnd, TBM_SETPOS, TRUE, 315);
    SendMessage(hwnd, TBM_SETTICFREQ, 10, 0);
 
-   CreateWindow(WC_BUTTON, TEXT("catch"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH * 4, appstate->ar.GetBottom() + BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT,
-       m_hwnd, (HMENU)ID_CATCH, hInstance, NULL);
-
-   CreateWindow(WC_BUTTON, TEXT("start script"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH * 3, appstate->ar.GetBottom() + BUTTON_HEIGHT*2, BUTTON_WIDTH, BUTTON_HEIGHT,
-       m_hwnd, (HMENU)ID_SCRIPT_START, hInstance, NULL);
-
-   CreateWindow(WC_BUTTON, TEXT("stop script"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->client_rect.GetLeft() + BUTTON_WIDTH * 4, appstate->ar.GetBottom() + BUTTON_HEIGHT*2, BUTTON_WIDTH, BUTTON_HEIGHT,
-       m_hwnd, (HMENU)ID_SCRIPT_STOP, hInstance, NULL);
-
    HWND list_box_hwnd = CreateWindowEx(WS_EX_CLIENTEDGE, WC_LISTBOX, TEXT("list view"), WS_CHILD | LBS_HASSTRINGS | WS_VISIBLE | WS_BORDER,
-       appstate->ar.GetRight()+20, appstate->ar.GetTop(), BUTTON_WIDTH * 2, appstate->ar.GetBottom() - appstate->ar.GetTop(),
+       appstate->client_rect.GetRight()-2*BTN_SIZE.cx, appstate->client_rect.GetTop()+PADDING.cx,
+       2*BTN_SIZE.cx-2*PADDING.cx, appstate->client_rect.GetBottom()-2*BTN_SIZE.cy-appstate->client_rect.GetTop()-2*PADDING.cy,
        m_hwnd, NULL, hInstance, NULL);
    appstate->list_box = list_box_hwnd;
 
-   CreateWindow(WC_BUTTON, TEXT("usuñ"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->ar.GetRight()+20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+   CreateWindow(WC_BUTTON, TEXT("&usuñ"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+       appstate->client_rect.GetRight()-2*BTN_SIZE.cx, appstate->client_rect.GetBottom()-2*BTN_SIZE.cy+PADDING.cy,
+       BTN_SIZE.cx/2-2*PADDING.cx, BTN_SIZE.cy-2*PADDING.cy,
        m_hwnd, (HMENU)ID_TRAJECTORY_DEL, hInstance, NULL);
 
-   CreateWindow(WC_BUTTON, TEXT("catch"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->ar.GetRight() + 0.5*BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+   CreateWindow(WC_BUTTON, TEXT("&catch"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+       appstate->client_rect.GetRight() - 1.5 * BTN_SIZE.cx, appstate->client_rect.GetBottom() - 2 * BTN_SIZE.cy+PADDING.cy,
+       BTN_SIZE.cx / 2 - 2 * PADDING.cx, BTN_SIZE.cy - 2 * PADDING.cy,
        m_hwnd, (HMENU)ID_TRAJECTORY_CATCH, hInstance, NULL);
 
-   CreateWindow(WC_BUTTON, TEXT("drop"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->ar.GetRight() + BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+   CreateWindow(WC_BUTTON, TEXT("&drop"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+       appstate->client_rect.GetRight() - 1 * BTN_SIZE.cx, appstate->client_rect.GetBottom() - 2 * BTN_SIZE.cy+PADDING.cy,
+       BTN_SIZE.cx / 2 - 2 * PADDING.cx, BTN_SIZE.cy - 2 * PADDING.cy,
        m_hwnd, (HMENU)ID_TRAJECTORY_REL, hInstance, NULL);
 
-   CreateWindow(WC_BUTTON, TEXT("stop"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->ar.GetRight() + 1.5*BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 0 * BUTTON_HEIGHT, BUTTON_WIDTH * 0.5, BUTTON_HEIGHT,
+   CreateWindow(WC_BUTTON, TEXT("&stop"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+       appstate->client_rect.GetRight() - 0.5 * BTN_SIZE.cx, appstate->client_rect.GetBottom() - 2 * BTN_SIZE.cy+PADDING.cy,
+       BTN_SIZE.cx / 2 - 2 * PADDING.cx, BTN_SIZE.cy - 2 * PADDING.cy,
        m_hwnd, (HMENU)ID_TRAJECTORY_STOP, hInstance, NULL);
 
    CreateWindow(WC_BUTTON, TEXT("follow"), WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-       appstate->ar.GetRight() + 0 * BUTTON_WIDTH + 20, appstate->ar.GetBottom() + 1 * BUTTON_HEIGHT, BUTTON_WIDTH * 1, BUTTON_HEIGHT,
+       appstate->client_rect.GetRight() - 2 * BTN_SIZE.cx, appstate->client_rect.GetBottom() - 1 * BTN_SIZE.cy+PADDING.cy,
+       BTN_SIZE.cx - 2 * PADDING.cx, BTN_SIZE.cy - 2 * PADDING.cy,
        m_hwnd, (HMENU)ID_TRAJECTORY_LOAD, hInstance, NULL);
 
    if (!m_hwnd)
@@ -702,7 +740,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 }
                 else
                 {
-                    if (appstate->list_box_trajectory.size() != 0)
+                    if (!appstate->list_box_trajectory.empty())
                     {
                         appstate->list_box_trajectory.erase(appstate->list_box_trajectory.end() - 1);
                         ListBox_DeleteString(appstate->list_box, appstate->list_box_trajectory.size());
@@ -722,6 +760,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     appstate->print(appstate->list_box_trajectory[result], text);
                     ListBox_InsertString(appstate->list_box, result, text);
                 }
+                else
+                {
+                    if (!appstate->list_box_trajectory.empty())
+                    {
+                        result = appstate->list_box_trajectory.size() - 1;
+                        appstate->list_box_trajectory[result].robotCommand = rc_catch;
+                        ListBox_DeleteString(appstate->list_box, result);
+                        TCHAR text[25];
+                        appstate->print(appstate->list_box_trajectory[result], text);
+                        ListBox_InsertString(appstate->list_box, result, text);
+                    }
+                }
                 break;
             }
 
@@ -736,6 +786,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     appstate->print(appstate->list_box_trajectory[result], text);
                     ListBox_InsertString(appstate->list_box, result, text);
                 }
+                else
+                {
+                    if (!appstate->list_box_trajectory.empty())
+                    {
+                        result = appstate->list_box_trajectory.size() - 1;
+                        appstate->list_box_trajectory[result].robotCommand = rc_stop;
+                        ListBox_DeleteString(appstate->list_box, result);
+                        TCHAR text[25];
+                        appstate->print(appstate->list_box_trajectory[result], text);
+                        ListBox_InsertString(appstate->list_box, result, text);
+                    }
+                }
                 break;
             }
 
@@ -749,6 +811,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     TCHAR text[25];
                     appstate->print(appstate->list_box_trajectory[result], text);
                     ListBox_InsertString(appstate->list_box, result, text);
+                }
+                else
+                {
+                    if (!appstate->list_box_trajectory.empty())
+                    {
+                        result = appstate->list_box_trajectory.size() - 1;
+                        appstate->list_box_trajectory[result].robotCommand = rc_release;
+                        ListBox_DeleteString(appstate->list_box, result);
+                        TCHAR text[25];
+                        appstate->print(appstate->list_box_trajectory[result], text);
+                        ListBox_InsertString(appstate->list_box, result, text);
+                    }
                 }
                 break;
             }
@@ -834,6 +908,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         SendMessage(appstate->list_box, LB_ADDSTRING, 0, (LPARAM)text);
         break;
     }
+    case WM_SIZING:
+    {
+        appstate->pause_simulation = true;
+        break;
+    }
+    case WM_SIZE:
+    {
+        appstate->pause_simulation = false;
+        break;
+    }
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
     }
@@ -859,7 +943,6 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
     }
     return (INT_PTR)FALSE;
 }
-
 
 void myOnPaint(HDC& hdc, AppState* appstate)
 {

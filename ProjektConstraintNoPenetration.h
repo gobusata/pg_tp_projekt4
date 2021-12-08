@@ -3,48 +3,43 @@
 #include "ProjektConstraint.h"
 #include "UniversalConvexShape.h"
 class ProjektConstraintNoPenetration :
-    public ProjektConstraint
+    public ProjektTwoBodyConstraint
 {
 public:
     struct SubConstraint;
     std::vector<SubConstraint> subconstraints;
+    GjkSimplex intersection;
 private:
-    
-    
-    UniversalConvexShape &a, &b;
-    MatrixXf minv_mat;
     static float friction_coeff, beta, borderZoneWidth;
-    static bool warm_start;
-    bool shapes_in_close_proximity, active;
-    Intersection intersection;
+    bool shapes_in_close_proximity;
     float getDistance(const ProjektConstraintNoPenetration::SubConstraint& sc);
 
 public:
 
-    ProjektConstraintNoPenetration(UniversalConvexShape& _a, UniversalConvexShape & _b);
+    ProjektConstraintNoPenetration(ProjektConvexBody& _a, ProjektConvexBody& _b);
 
     Vector2f pointOfContact(const ProjektConstraintNoPenetration::SubConstraint& sc) const;
-
-    
 
     enum TouchingFeature
     {
         vertex, edge
     };
 
-    struct SubConstraint
+    class SubConstraint
     {
+    public:
         Vector2f normal{ 0, 0 };
-        bool active{ true }, valid{ true };
+        bool active{ true };
         float ln{ 0 }, lt{ 0 }, acc_ln{ 0 }, acc_lt{ 0 }, constraint_error{ 0 };
         int  cpa[2], cpb[2];
         TouchingFeature tfa, tfb;
-        MatrixXf j_mat;
+        Eigen::Matrix<float, 1, 6> jmat;
         SubConstraint() :
-            j_mat(1, 6), constraint_error{ 0 }, valid{ false }, active{ false } {};
+            constraint_error{ 0 }, active{ false } {}
+        void getTf(const GjkSimplex& _i, const ClosestFeature& _cs);
     };
     
-    bool eq(const ProjektConstraintNoPenetration::SubConstraint& a, const ProjektConstraintNoPenetration& b);
+    bool eq(const ProjektConstraintNoPenetration::SubConstraint& a, const ProjektConstraintNoPenetration::SubConstraint& b);
 
     void activateImpulse() override;
 

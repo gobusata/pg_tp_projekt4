@@ -8,13 +8,6 @@
 
 using namespace Eigen;
 
-
-template<typename Ostream>
-Ostream & operator<<(Ostream & os, const Eigen::Vector2f & val)
-{
-	return os << "(" << val.x() << ", " << val.y() << ")";
-}
-
 template <typename OutputIt, typename CharT>
 OutputIt copy_str(OutputIt it, const CharT s[])
 {
@@ -28,7 +21,7 @@ OutputIt copy_str(OutputIt it, const CharT s[])
 }
 
 template <typename Scalar_, int Rows_, int Cols_>
-struct fmt::formatter<Eigen::Matrix<Scalar_, Rows_, Cols_>>: fmt::formatter<float>
+struct fmt::formatter<Eigen::Matrix<Scalar_, Rows_, Cols_>>: fmt::formatter<Scalar_>
 {
     template<typename FormatContext>
     auto format(const Eigen::Matrix<Scalar_, Rows_, Cols_>& v,
@@ -52,7 +45,42 @@ struct fmt::formatter<Eigen::Matrix<Scalar_, Rows_, Cols_>>: fmt::formatter<floa
     }
 };
 
+template <typename Scalar_>
+struct fmt::formatter<Eigen::Matrix<Scalar_, Eigen::Dynamic, Eigen::Dynamic>> : fmt::formatter<float>
+{
+    template<typename FormatContext>
+    auto format(const Eigen::Matrix<Scalar_, Eigen::Dynamic, Eigen::Dynamic>& v,
+        FormatContext& ctx)->decltype(ctx.out())
+    {
+        Eigen::Index r_ = v.rows(), c_ = v.cols();
+        copy_str(ctx.out(), "(");
+        for (int i = 0; i < r_; i++)
+        {
+            for (int j = 0; j < c_ - 1; j++)
+            {
+                fmt::formatter<Scalar_>::format(v(i, j), ctx);
+                *ctx.out() = ',';
+                *ctx.out() = ' ';
+            }
+            fmt::formatter<Scalar_>::format(v(i, c_ - 1), ctx);
+            if (i == r_ - 1)
+                copy_str(ctx.out(), ") ");
+            else
+                copy_str(ctx.out(), "; ");
+        }
+        return ctx.out();
+    }
+};
+
 extern std::shared_ptr<spdlog::logger> logger;
+
+inline void dbginit()
+{
+#ifdef _DEBUG 
+    spdlog::get("basic_logger")->set_pattern("%v");
+#endif // _DEBUG
+}
+
 template <typename FormatString, typename... Args> 
 inline void dbgmsg(const FormatString& fmt, Args&&...args)
 {
@@ -61,5 +89,6 @@ inline void dbgmsg(const FormatString& fmt, Args&&...args)
 #endif // _DEBUG
 
 }
+
 
 #endif // !_PROJEKT_LOGS_

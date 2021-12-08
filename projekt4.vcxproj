@@ -150,13 +150,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="framework.h" />
+    <ClInclude Include="PensAndBrushes.h" />
     <ClInclude Include="projekt4.h" />
     <ClInclude Include="ProjektConstraint.h" />
     <ClInclude Include="ProjektConstraintNoPenetration.h" />
     <ClInclude Include="ProjektConstraintPlane.h" />
     <ClInclude Include="ProjektLogs.h" />
-    <ClInclude Include="ProjektRectangle.h" />
-    <ClInclude Include="ProjektTriangle.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="Robot.h" />
     <ClInclude Include="targetver.h" />
@@ -170,8 +169,6 @@
     <ClCompile Include="ProjektConstraintNoPenetration.cpp" />
     <ClCompile Include="ProjektConstraintPlane.cpp" />
     <ClCompile Include="ProjektLogs.cpp" />
-    <ClCompile Include="ProjektRectangle.cpp" />
-    <ClCompile Include="ProjektTriangle.cpp" />
     <ClCompile Include="Robot.cpp" />
     <ClCompile Include="Triangle.cpp" />
     <ClCompile Include="UniversalConvexShape.cpp" />
@@ -180,6 +177,7 @@
     <ResourceCompile Include="projekt4.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="icon1.ico" />
     <Image Include="projekt4.ico" />
     <Image Include="small.ico" />
   </ItemGroup>

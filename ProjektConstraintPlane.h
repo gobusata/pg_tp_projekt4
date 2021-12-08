@@ -5,23 +5,20 @@
 class ProjektConstraintPlane:
 	public ProjektConstraint
 {
-public:
-	struct SubConstraint;
 private:
-	UniversalConvexShape & ucs;
+	ProjektConvexBody & ucs;
 	const Vector2f position, dir, tan;
 	bool active;
 	Vector2f tmp_r;
-	
 public:
-	ProjektConstraintPlane(UniversalConvexShape& _ucs, const Vector2f& _dir, const Vector2f& _pos) :
-		ucs(_ucs), dir(_dir.normalized()), tan({ cross(dir, 1) }), position(_pos), active{ false } {};
-
+	struct SubConstraint;
 	static float beta;
 	static float borderZoneWidth, friction_coeff;
-	static bool warm_start;
-
 	std::vector<SubConstraint> subconstraints;
+
+	ProjektConstraintPlane(ProjektConvexBody& _ucs, const Vector2f& _dir, const Vector2f& _pos) :
+		ucs(_ucs), dir(_dir.normalized()), tan({ cross(dir, 1) }), position(_pos), active{ false } {};
+
 	struct SubConstraint
 	{
 		float ln, lt, accln, acclt, constraint_error;
@@ -41,10 +38,10 @@ public:
 	
 	float applyAccImpulse() override;
 
-	Vector2f pointOfContact(const ProjektConstraintPlane::SubConstraint& sc) const;
+	float calcImpulse(SubConstraint& sc, float dt);
 
-	float calcImpulse(SubConstraint & sc, float dt);
-	
-	void applyImpulse(SubConstraint & sc);
+	void applyImpulse(SubConstraint& sc);
+
+	Vector2f pointOfContact(const ProjektConstraintPlane::SubConstraint& sc) const;
 };
 

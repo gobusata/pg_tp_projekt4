@@ -12,53 +12,65 @@
 #include <gsl/gsl_linalg.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
-#undef max
 #include "ProjektLogs.h"
 
-using namespace Gdiplus;
 using namespace Eigen;
+template <typename Type>
+using Vector2 = Eigen::Matrix<Type, 2, 1>;
 
-struct Intersection;
+struct GjkSimplex;
 struct VectorWithIndex;
-class UniversalConvexShape
+
+class ProjektConvexPolygon
+{
+	Affine2f tm;
+	Vector3f pos;
+public:
+	// vertices of the bounding polygon
+	std::vector<Vector2f> vs;
+	ProjektConvexPolygon() : vs() {};
+	ProjektConvexPolygon(const std::vector<Vector2f>& _vs) : vs(_vs) {};
+	void setTranslation(const Vector2f& _t);
+	void setRotation(float _r);
+	void setPosition(const Vector3f& _pos);
+	bool addVertex(int i, Vector2f v);
+	bool addVertex(VectorWithIndex v);
+	Vector2f getPosition() const;
+	Vector2f getVertex(int i) const;
+	Vector2f getTransformedVertex(int i) const;
+	Vector2f getVertexPos(int i) const;
+	void offsetVertices(Vector2f _v);
+	VectorWithIndex gjkSupportVer(const Vector2f& _dir) const;
+	friend GjkSimplex & gjkSimplex(const ProjektConvexPolygon& a, const ProjektConvexPolygon& b, GjkSimplex & is);
+};
+
+GjkSimplex & gjkSimplex(const ProjektConvexPolygon& a, const ProjektConvexPolygon& b, GjkSimplex & is);
+
+class ProjektConvexBody
 {
 public:
+	ProjektConvexPolygon pcp;
 	Vector3f pos, vel;
-	std::vector <Vector2f> vertices;
+	DiagonalMatrix<float, 3> kmat;
 	float mass, inertia, sphere_bound;
 	static float gravity;
-	GraphicsPath shape;
-
+	Gdiplus::GraphicsPath shape;
 	void createShape();
-public:
-	
-	UniversalConvexShape();
-	
-	UniversalConvexShape(const UniversalConvexShape&);
-
-	Vector2f getTransformedVertex(int i);
-
-	Vector2f getVertexPos(int i);
-	
-	void draw(Graphics* lpgraphics, Pen* lppen, Brush* lpbrush);
-	
+	ProjektConvexBody();
+	ProjektConvexBody(const ProjektConvexBody&);
+	ProjektConvexBody(const Vector3f& _pos, const Vector3f& _vel, const std::vector<Vector2f>& _vs, float _mass, float _inertia);
+	void draw(Gdiplus::Graphics* lpgraphics, Gdiplus::Pen* lppen, Gdiplus::Brush* lpbrush);
 	void updateVel(float dt);
-	
 	void updatePos(float dt);
-	
-	VectorWithIndex gjkSupportVer(const Vector2f&) const;
-
 };
 
 struct VectorWithIndex : public Vector2f
 {
 public:
 	int index;
-	
-	VectorWithIndex() = default;
 
+	VectorWithIndex() = default;
 	VectorWithIndex(int a, Vector2f b) : index{ a }, Vector2f{ b } {};
-	
 	VectorWithIndex(Vector2f a, int b) : index{ b }, Vector2f{ a } {};
 };
 
@@ -73,57 +85,62 @@ struct ClosestFeature
 	ClosestFeature(std::vector<VectorWithIndex> a, float b) : feature{ a }, distance{ b } {};
 };
 
-/// <summary>
-/// Class describing contact of to convex 2D figures
-/// </summary>
-struct Intersection
+struct GjkSimplex
 {
-	bool collision;
-	union {
-		struct {
-			VectorWithIndex point;
-			Vector2f normal;
-		};
-		struct {
-			float distance;
-			std::vector<VectorWithIndex> aClosestFeature, bClosestFeature;
-		};
+	enum SimpStateEnum
+	{
+		uninitialized, point, line, triangle
 	};
-	
-	Intersection() : collision{ false }, distance(0), aClosestFeature{}, bClosestFeature{} {};
-	
-	Intersection(bool a);
-	
-	Intersection(bool a, VectorWithIndex b, Vector2f c) : collision(true), point(b), normal(c) {};
-	
-	Intersection(bool a, float b, std::vector<VectorWithIndex> c, std::vector<VectorWithIndex> d) :
-		collision{ false }, distance{ b }, aClosestFeature{ c }, bClosestFeature{ d } {};
-	
-	Intersection(const Intersection& a);
-	
-	Intersection& operator=(const Intersection& a);
-	
-	~Intersection();
-	
-
+	SimpStateEnum simpstate = uninitialized;
+	bool collision;
+	std::array<VectorWithIndex, 6> simplex_vertices;
+	std::array<Vector2f, 3> simplex;
+	void refresh(const ProjektConvexPolygon & _a, const ProjektConvexPolygon & _b);
 };
 
+template<>
+struct fmt::formatter<GjkSimplex>
+{
+    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin())
+    {
+        auto it = ctx.begin(), end = ctx.end();
+        return end;
+    }
 
-Intersection gjkSimplex(const UniversalConvexShape&, const UniversalConvexShape&);
+    template <typename FormatContext>
+    auto format(const GjkSimplex& gs, FormatContext& ctx) -> decltype(ctx.out())
+    {
+        //*ctx.out() = '\n';
+        switch (gs.simpstate)
+        {
+        case GjkSimplex::point:
+            format_to(ctx.out(), "simpstate: vertex");
+            break;
+        case GjkSimplex::line:
+            format_to(ctx.out(), "simpstate: line\n");
+			format_to(ctx.out(), "simplex: {:.2f}, {:.2f}", gs.simplex[0], gs.simplex[1]);
+            break;
+        case GjkSimplex::triangle:
+            format_to(ctx.out(), "simpstate: triangle");
+			format_to(ctx.out(), "simplex: {:.2f}, {:.2f}, {:.2f}", gs.simplex[0], gs.simplex[1], gs.simplex[2]);
+            break;
+        }
+		return ctx.out();
+    }
+};
+
+Gdiplus::GraphicsPath* createGraphicsPath(const std::vector<Vector2f>& _vs);
 
 /// <summary>
-/// checks using sheres bounding UniversalConvexShape instances, wether shapes are in close proximity
+/// checks using sheres bounding ProjektConvexBody instances, wether shapes are in close proximity
 /// </summary>
-bool collisionDetectionWide(const UniversalConvexShape&, const UniversalConvexShape&);
+bool collisionDetectionWide(const ProjektConvexBody&, const ProjektConvexBody&);
 
-Intersection collisionDetection(const UniversalConvexShape& a, const UniversalConvexShape& b);
+Vector2f findCenterOfMass(const std::vector<Vector2f>& _vs);
 
-//void collisionDetectionNarrow(UniversalConvexShape& a, const UniversalConvexShape& b);
+float findMomentOfInertia(const std::vector<Vector2f>& _vs);
 
-void collisionWithMovingObjectSol(float, float, Vector2f&, float&, Vector2f,
-	float, float, Vector2f&, float&, Vector2f);
-
-void collisionWithMovingObject(UniversalConvexShape&, UniversalConvexShape&);
+GjkSimplex collisionDetection(const ProjektConvexBody& a, const ProjektConvexBody& b);
 
 /// <summary>
 /// calculates shortest distance between triangle and point 
@@ -131,13 +148,13 @@ void collisionWithMovingObject(UniversalConvexShape&, UniversalConvexShape&);
 /// <param name="tri">list of triangles vertices' coordinates</param>
 /// <param name="p">point coordinates</param>
 /// <returns></returns>
-ClosestFeature pointToTriangle(std::vector<Vector2f> tri, const Vector2f& p);
+ClosestFeature pointToTriangle(std::array<Vector2f, 3> tri, const Vector2f& p);
 
-ClosestFeature pointToLine(std::vector<Vector2f> line, const Vector2f& p);
+ClosestFeature pointToLine(std::array<Vector2f, 2> line, const Vector2f& p);
 
-Vector2f barycentricCoordinates2(std::vector<Vector2f> line, const Vector2f);
+Vector2f barycentricCoordinates2(std::array<Vector2f, 2> line, const Vector2f);
 
-Vector3f barycentricCoordinates3(std::vector<Vector2f> tri, const Vector2f);
+Vector3f barycentricCoordinates3(std::array<Vector2f, 3> tri, const Vector2f);
 
 /// <summary>
 /// computes cartrsian coordinates of a point from barycentric coordinates
@@ -145,7 +162,7 @@ Vector3f barycentricCoordinates3(std::vector<Vector2f> tri, const Vector2f);
 /// <param name="tri">vertices of triangle, for which barycentric coordinates have been computed</param>
 /// <param name="bc">barycnetric coordinates</param>
 /// <returns></returns>
-Vector2f cartesianCoordinates(const std::vector<Vector2f> tri, const Vector3f bc);
+Vector2f cartesianCoordinates(const std::array<Vector2f, 3> tri, const Vector3f bc);
 
 float cross(const Vector2f&, const Vector2f&);
 
@@ -154,5 +171,7 @@ Vector2f cross(const Vector2f& v1, float v2);
 Vector2f cross(float v1, const Vector2f& v2);
 
 template <typename T> int sgn(T val);
+
+inline Gdiplus::PointF ev2gp(const Vector2f& v) { return Gdiplus::PointF(v.x(), v.y()); }
 
 #endif
