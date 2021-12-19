@@ -66,7 +66,7 @@ public:
     std::vector<Pen*> pens;
     SolidBrush redBrush, greenBrush, blueBrush, whiteBrush, blackBrush;
     Pen redPen, greenPen, bluePen, whitePen, blackPen;
-    bool pause_simulation = false;
+    bool pause_simulation = true;
     //rects
     Rect client_rect;
     //animation rect
@@ -152,7 +152,12 @@ public:
                 if (sc.active)
                 {
                     Vector2f tmp{ con->pointOfContact(sc) };
-                    graphics->FillRectangle(&this->redBrush, (REAL)tmp[0] - 1.5, (REAL)tmp[1] - 1.5, (REAL)3., (REAL)3.);
+                    graphics->FillEllipse(&this->redBrush, (REAL)tmp[0] - 1.5, (REAL)tmp[1] - 1.5, (REAL)3., (REAL)3.);
+                }
+                else if (sc.valid)
+                {
+                    Vector2f tmp{ con->pointOfContact(sc) };
+                    graphics->FillEllipse(&this->greenBrush, (REAL)tmp[0] - 1.5, (REAL)tmp[1] - 1.5, (REAL)3., (REAL)3.);
                 }
             }
         }
@@ -181,7 +186,7 @@ public:
             (*c)->activateImpulse();
         for (std::shared_ptr<ProjektConstraint> & c : constraints)
            c->applyAccImpulse();
-        for (i= 0; i<20; i++)
+        for (i= 0; i<10; i++)
         {
             error = 0;
             for (std::vector<std::shared_ptr<ProjektConstraint>>::iterator c = constraints.begin(); c != constraints.end(); c++)
@@ -205,8 +210,8 @@ public:
                     }
                 }
             }
-            if (error < 0.05)
-                break;
+            //if (error < 0.05)
+                //break;
         }
         if (i > 0)
             dbgmsg("Number of loops: {}\t\t error = {:.4e}", i, error);
@@ -229,23 +234,22 @@ public:
         constraints.clear();
         planeConstraints.clear();
         noPenetrationConstraints.clear();
+        pause_simulation = false;
         gravity.Y = ProjektConvexBody::gravity;
-        //shapes.push_back(ProjektConvexBody(Vector3f{ 260, ar.GetBottom() - 21, 0 }, Vector3f{ 0, 0, 0 },
-        //    std::vector<Vector2f>({ Vector2f{ 20.00, 0.00 }, Vector2f{ 18.48, 7.65 }, Vector2f{ 14.14, 14.14 }, Vector2f{ 7.65, 18.48 }, 
-        //        Vector2f{ -0.00, 20.00 }, Vector2f{ -7.65, 18.48 }, Vector2f{ -14.14, 14.14 }, Vector2f{ -18.48, 7.65 }, 
-        //        Vector2f{ -20.00, -0.00 }, Vector2f{ -18.48, -7.65 }, Vector2f{ -14.14, -14.14 }, Vector2f{ -7.65, -18.48 }, 
-        //        Vector2f{ 0.00, -20.00 }, Vector2f{ 7.65, -18.48 }, Vector2f{ 14.14, -14.14 } }),
-        //    1.f, 1.f));
         shapes.push_back(ProjektConvexBody(Vector3f{ 300, ar.GetBottom() - 41, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{20, 40}, Vector2f{-20, 40}, Vector2f{-20, -40}, Vector2f{20, -40} }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 300, ar.GetBottom() - 100, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{40, 5}, Vector2f{40, -5}, Vector2f{-40, -5}, Vector2f{-40, 5} }), 1.f, 1.f));
+            std::vector<Vector2f>({ Vector2f{40, 40}, Vector2f{-40, 40}, Vector2f{-40, -40}, Vector2f{40, -40} }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 300, ar.GetBottom() - 223, 0.0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{40, 40}, Vector2f{-40, 40}, Vector2f{-40, -40}, Vector2f{40, -40} }), 1.f, 1.f));
         for (std::vector<ProjektConvexBody>::iterator pcb1 = shapes.begin(); pcb1 != shapes.end(); pcb1++)
         {
             constraints.push_back(std::make_shared<ProjektConstraintPlane>(*pcb1, Vector2f{ 0.f , 1.f }, Vector2f{ 0.5*(ar.GetLeft() + ar.GetRight()), ar.GetBottom() }));
             planeConstraints.push_back(std::reinterpret_pointer_cast<ProjektConstraintPlane>(constraints.back()));
-            for (auto pcb2 = pcb1+1; pcb2 != shapes.end(); pcb2++)
-                constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(*pcb1, *pcb2));
+            for (auto pcb2 = pcb1 + 1; pcb2 != shapes.end(); pcb2++)
+            {
+                std::shared_ptr<ProjektConstraintNoPenetration> pcnp = std::make_shared<ProjektConstraintNoPenetration>(*pcb1, *pcb2);
+                constraints.push_back(pcnp);
+                noPenetrationConstraints.push_back(pcnp);
+            }
         }
 
     }
@@ -256,33 +260,18 @@ public:
         constraints.clear();
         planeConstraints.clear();
         noPenetrationConstraints.clear();
+        pause_simulation = false;
         gravity.Y = ProjektConvexBody::gravity;
-        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 42, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 124, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 206, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 170, ar.GetBottom() - 22, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 20, 20 }, Vector2f{ -20, 20 }, Vector2f{ -20, -20 }, Vector2f{ 20, -20 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 170, ar.GetBottom() - 64, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 20, 20 }, Vector2f{ -20, 20 }, Vector2f{ -20, -20 }, Vector2f{ 20, -20 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 170, ar.GetBottom() - 106, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 20, 20 }, Vector2f{ -20, 20 }, Vector2f{ -20, -20 }, Vector2f{ 20, -20 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 220, ar.GetBottom() - 12, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 220, ar.GetBottom() - 34, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 220, ar.GetBottom() - 56, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 300, ar.GetBottom() - 56, 0 }, Vector3f{ -0.3, -0.3, 0 },
-            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
-        for (std::vector<ProjektConvexBody>::iterator pcb1 = shapes.begin(); pcb1 != shapes.end(); pcb1++)
+        shapes.push_back(ProjektConvexBody(Vector3f(50, ar.GetBottom() - 200, 0), Vector3f(0, 0, 0),
+            { Vector2f(40, -40), Vector2f(-40, -40), Vector2f(-40, 40), Vector2f(40, 40) }, 1, 1));
+        shapes.push_back(ProjektConvexBody(Vector3f(150, ar.GetBottom() - 200, 0), Vector3f(0, 0, 0e-3),
+            { Vector2f(40, -40), Vector2f(-40, -40), Vector2f(-40, 40), Vector2f(2, 43), Vector2f(40, 40) }, 1, 1));
+        for (auto& shape : shapes)
         {
-            constraints.push_back(std::make_shared<ProjektConstraintPlane>(*pcb1, Vector2f{ 0.f , 1.f }, Vector2f{ 0.5 * (ar.GetLeft() + ar.GetRight()), ar.GetBottom() }));
-            planeConstraints.push_back(std::reinterpret_pointer_cast<ProjektConstraintPlane>(constraints.back()));
-            for (auto pcb2 = pcb1 + 1; pcb2 != shapes.end(); pcb2++)
-                constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(*pcb1, *pcb2));
+            std::shared_ptr<ProjektConstraintPlane> tmp = 
+                std::make_shared<ProjektConstraintPlane>(shape, Vector2f( 0, 1 ), Vector2f( 0, ar.GetBottom() ));
+            constraints.push_back(tmp);
+            planeConstraints.push_back(tmp);
         }
     }
 
@@ -293,19 +282,20 @@ public:
         planeConstraints.clear();
         noPenetrationConstraints.clear();
         gravity.Y = ProjektConvexBody::gravity;
-        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 42, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 126, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 210, 0 }, Vector3f{ 0, 0, 0 },
-            std::vector<Vector2f>({ Vector2f{ 10, 10 }, Vector2f{ -10, 10 }, Vector2f{ -10, -10 }, Vector2f{ 10, -10 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f(200, ar.GetBottom() - 41, 0), Vector3f(0, 0, 0), 
+            { Vector2f(40, 40), Vector2f(-40, 40), Vector2f(-40, -40), Vector2f(40, -40) }, 1, 1));
+        shapes.push_back(ProjektConvexBody(Vector3f(200, ar.GetBottom() - 95 - 40 * 1.45, 3.14 / 4), Vector3f(0, 0, 0),
+            { Vector2f(40, 40), Vector2f(-40, 40), Vector2f(-40, -40), Vector2f(40, -40) }, 1, 1));
         for (std::vector<ProjektConvexBody>::iterator pcb1 = shapes.begin(); pcb1 != shapes.end(); pcb1++)
         {
             constraints.push_back(std::make_shared<ProjektConstraintPlane>(*pcb1, Vector2f{ 0.f , 1.f }, Vector2f{ 0.5 * (ar.GetLeft() + ar.GetRight()), ar.GetBottom() }));
             planeConstraints.push_back(std::reinterpret_pointer_cast<ProjektConstraintPlane>(constraints.back()));
             for (auto pcb2 = pcb1 + 1; pcb2 != shapes.end(); pcb2++)
-                constraints.push_back(std::make_shared<ProjektConstraintNoPenetration>(*pcb1, *pcb2));
-            
+            {
+                std::shared_ptr<ProjektConstraintNoPenetration> pcnp = std::make_shared<ProjektConstraintNoPenetration>(*pcb1, *pcb2);
+                constraints.push_back(pcnp);
+                noPenetrationConstraints.push_back(pcnp);
+            }            
         }
     }
 
@@ -316,10 +306,12 @@ public:
         planeConstraints.clear();
         noPenetrationConstraints.clear();
         gravity.Y = ProjektConvexBody::gravity;
-        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 40, 0 }, Vector3f{ 0, 0, 0 },
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 50, 0 }, Vector3f{ 0, 0, 0 },
             std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 134, 0 }, Vector3f{ 0, 0, 0 },
+        shapes.push_back(ProjektConvexBody(Vector3f{ 120, ar.GetBottom() - 144, 0.05 }, Vector3f{ 0, 0, 0 },
             std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
+        //shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 248, 0 }, Vector3f{ 0, 0, 0 },
+        //    std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
         for (std::vector<ProjektConvexBody>::iterator pcb1 = shapes.begin(); pcb1 != shapes.end(); pcb1++)
         {
             constraints.push_back(std::make_shared<ProjektConstraintPlane>(*pcb1, Vector2f{ 0.f , 1.f }, Vector2f{ 0.5 * (ar.GetLeft() + ar.GetRight()), ar.GetBottom() }));

@@ -1,20 +1,19 @@
 #include "ProjektConstraintPlane.h"
 
-float ProjektConstraintPlane::borderZoneWidth = 0.f;
-float ProjektConstraintPlane::beta = 0.05;
-float ProjektConstraintPlane::friction_coeff = 0.02;
+float ProjektConstraintPlane::borderZoneWidth = 3.f;
+float ProjektConstraintPlane::beta = 0e-1;
+float ProjektConstraintPlane::friction_coeff = 0.15;
 
 using SubConstraint = ProjektConstraintPlane::SubConstraint;
 
 
 void ProjektConstraintPlane::activateImpulse()
 {
-	Rotation2Df trans1{ Rotation2Df(ucs.pos(2)) };	
 	std::vector<float> t1(ucs.pcp.vs.size());
 	std::transform(ucs.pcp.vs.begin(), ucs.pcp.vs.end(), t1.begin(),
-		[this, &trans1](Vector2f v)->float
+		[this](Vector2f v)->float
 		{
-			return dir.dot(Vector2f{ ucs.pos(0), ucs.pos(1) } + trans1 * v - position) - borderZoneWidth;
+			return dir.dot(ucs.pcp.getVertexPos(v) - position) + borderZoneWidth;
 		}
 	);
 

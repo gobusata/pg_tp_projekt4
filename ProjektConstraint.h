@@ -7,7 +7,6 @@ class ProjektConstraint
 {
 public:
 	static bool warm_start;
-	bool active;
 	struct SubConstraint;
 	virtual void activateImpulse() = 0;
 	virtual float calcApplyImpulse(float dt) = 0;

@@ -1,13 +1,14 @@
 #include "ProjektConstraintNoPenetration.h"
 
 float ProjektConstraintNoPenetration::friction_coeff = 0.2f;
-float ProjektConstraintNoPenetration::beta = 1e-5f;
-float ProjektConstraintNoPenetration::borderZoneWidth = 3.0f;
+float ProjektConstraintNoPenetration::beta = 0e-4f;
+float ProjektConstraintNoPenetration::borderZoneWidth = 6.0f;
+float ProjektConstraintNoPenetration::pointWidth = 1e0;
 
 using SubConstraint = ProjektConstraintNoPenetration::SubConstraint;
 
 ProjektConstraintNoPenetration::ProjektConstraintNoPenetration(ProjektConvexBody& _a, ProjektConvexBody& _b) :
-    ProjektTwoBodyConstraint{ _a, _b }, subconstraints{ 2 }
+    ProjektTwoBodyConstraint{ _a, _b }, subconstraints( std::size_t(2) )
 {
     for (int i = 0; i < 3; i++)
     {
@@ -18,51 +19,24 @@ ProjektConstraintNoPenetration::ProjektConstraintNoPenetration(ProjektConvexBody
 
 Vector2f ProjektConstraintNoPenetration::pointOfContact(const SubConstraint& sc) const
 {
-    //assert(sc.tfa != ProjektConstraintNoPenetration::edge || sc.tfb != ProjektConstraintNoPenetration::edge);
-    if (sc.tfa == ProjektConstraintNoPenetration::vertex && sc.tfb == ProjektConstraintNoPenetration::vertex)
+    switch (sc.tf)
     {
-        return 0.5 * (a.pcp.getVertexPos(sc.cpa[0]) + b.pcp.getVertexPos(sc.cpb[0]));
+    case ProjektConstraintNoPenetration::TouchingFeature::avbe:
+        return  a.pcp.getVertexPos(sc.ver);
+    case ProjektConstraintNoPenetration::TouchingFeature::aebv:
+        return b.pcp.getVertexPos(sc.ver);
     }
-    else if (sc.tfa == ProjektConstraintNoPenetration::vertex && sc.tfb == ProjektConstraintNoPenetration::edge)
-    {
-        return a.pcp.getVertexPos(sc.cpa[0]);
-    }
-    else if (sc.tfa == ProjektConstraintNoPenetration::edge && sc.tfb == ProjektConstraintNoPenetration::vertex)
-    {
-        return b.pcp.getVertexPos(sc.cpb[0]);
-    }
-    else if (sc.tfa == ProjektConstraintNoPenetration::edge && sc.tfb == ProjektConstraintNoPenetration::edge)
-    {
-        Vector2f v1{ a.pcp.getVertexPos( sc.cpa[1]) - a.pcp.getVertexPos(sc.cpa[0]) },
-            v2{ b.pcp.getVertexPos(sc.cpb[1]) - b.pcp.getVertexPos(sc.cpb[0]) };
-        Vector2f va{ a.pcp.getVertexPos(sc.cpa[1]) }, vb;
-        if (v1.dot(b.pcp.getVertexPos(sc.cpb[0])) < v1.dot(b.pcp.getVertexPos(sc.cpb[1])))
-            vb = b.pcp.getVertexPos(sc.cpb[0]);
-        else
-            vb = b.pcp.getVertexPos(sc.cpb[1]);
-        return (va * v1.norm() + vb * v2.norm()) / (v1.norm() + v2.norm());
-    }
-    return { 0, 0 };
-
 }
 
 float ProjektConstraintNoPenetration::getDistance(const SubConstraint& sc)
 {
-    if (sc.tfa == ProjektConstraintNoPenetration::vertex && sc.tfb == ProjektConstraintNoPenetration::vertex)
+    using TouchingFeature=ProjektConstraintNoPenetration::TouchingFeature;
+    switch (sc.tf)
     {
-        return sc.normal.dot(b.pcp.getVertexPos(sc.cpb[0])) - sc.normal.dot(a.pcp.getVertexPos(sc.cpa[0]));
-    }
-    else if (sc.tfa == ProjektConstraintNoPenetration::edge && sc.tfb == ProjektConstraintNoPenetration::vertex)
-    {
-        return sc.normal.dot(b.pcp.getVertexPos(sc.cpb[0])) - sc.normal.dot(a.pcp.getVertexPos(sc.cpa[0]));
-    }
-    else if (sc.tfa == ProjektConstraintNoPenetration::vertex && sc.tfb == ProjektConstraintNoPenetration::edge)
-    {
-        return sc.normal.dot(b.pcp.getVertexPos(sc.cpb[0])) - sc.normal.dot(a.pcp.getVertexPos(sc.cpa[0]));
-    }
-    else//if (sc.tfa == ProjektConstraintNoPenetration::edge && sc.tfb == ProjektConstraintNoPenetration::edge)
-    {
-        return sc.normal.dot( b.pcp.getVertexPos(sc.cpb[0]) - a.pcp.getVertexPos(sc.cpa[0]) );
+    case TouchingFeature::avbe:
+        return sc.normal.dot(b.pcp.getVertexPos(sc.edge[0]) - a.pcp.getVertexPos(sc.ver));
+    case TouchingFeature::aebv:
+        return sc.normal.dot(b.pcp.getVertexPos(sc.ver) - a.pcp.getVertexPos(sc.edge[0]));
     }
 }
 
@@ -71,7 +45,6 @@ void ProjektConstraintNoPenetration::activateImpulse()
     if (collisionDetectionWide(a, b))
     {
         shapes_in_close_proximity = true;
-        //intersection.simpstate = GjkSimplex::uninitialized;
         intersection = gjkSimplex(a.pcp, b.pcp, intersection);
         if (!intersection.collision)
         {
@@ -90,56 +63,76 @@ void ProjektConstraintNoPenetration::activateImpulse()
                 break;
             }
 
+
             if (cs.distance < borderZoneWidth)
             {
                 active = true;
                 SubConstraint sc;
-                sc.getTf(intersection, cs);
-                sc.active = true;
-                sc.constraint_error = borderZoneWidth - cs.distance;
-                dbgmsg("Subconstraint:\nnormal = {:.2f}, point_of_contact = {:.2f}", sc.normal, pointOfContact(sc));
-
-                //find redundant constraint
-                for (SubConstraint& sci : subconstraints) 
+                std::vector<SubConstraint> newSc{ getNewSubConstraints(cs, intersection) };
+                for (SubConstraint& sc : newSc)
                 {
-                    if (sc == sci || (pointOfContact(sc) - pointOfContact(sci)).norm() < borderZoneWidth)
-                    {
-                        sci.active = false;
-                        break;
-                    }
-                }   
+                    sc.active = true;
+                    sc.constraint_error = max(borderZoneWidth - cs.distance, 0);
+                }
+                
                 //reevaluate constraints' erros and turn off invalid subconstraints
                 for (SubConstraint& sci : subconstraints)
                 {
-                    if (sci.active)
+                    reevalSc(sci);
+                    if (sci.inBounds)
                     {
                         float d = getDistance(sci);
-                        if (d > borderZoneWidth+2)
+                        if (d > borderZoneWidth)
                         {
                             sci.active = false;
-                        }
+                        }   
                         else
                         {
-                            sci.constraint_error = borderZoneWidth - d;
+                            sci.active = true;
+                            sci.constraint_error = max(borderZoneWidth - d, 0);
                         }
                     }
                 }
-                //find subconstraint with smallest constraint error and replace with new subconstraint
-                SubConstraint* sc_max_dis = &subconstraints[0];
-                for (SubConstraint& sci : subconstraints)
+                //find redundant constraint
+                for (SubConstraint& sc : newSc)
                 {
-                    if (!sci.active)
+                    for (SubConstraint& sci : subconstraints) 
                     {
-                        sc_max_dis = &sci;
-                        break;
-                    }
-                    else if (sc_max_dis->constraint_error > sci.constraint_error)
+                        if (sci.valid)
+                        {
+                            if (sc == sci || (pointOfContact(sc) - pointOfContact(sci)).norm() < borderZoneWidth)
+                            {
+                                sc.inBounds = false;
+                                sc.valid = false;
+                                sc.active = false;
+                                break;
+                            }
+                        }
+                    }   
+                }
+                //find subconstraint with smallest constraint error and replace with new subconstraint
+                for (; !newSc.empty(); newSc.pop_back())
+                {
+                    SubConstraint& sc = newSc.back();
+                    if (sc.active)
                     {
-                        if (!(sc == sci))
-                            sc_max_dis = &sci;
+                        SubConstraint* sc_max_dis = &subconstraints[0];
+                        for (SubConstraint& sci : subconstraints)
+                        {
+                            if (!sci.valid)
+                            {
+                                sc_max_dis = &sci;
+                                break;
+                            }
+                            else if (sc_max_dis->constraint_error > sci.constraint_error)
+                            {
+                                if (!(sc == sci))
+                                    sc_max_dis = &sci;
+                            }
+                        }
+                        *sc_max_dis = sc;
                     }
                 }
-                *sc_max_dis = sc;
             }
             else
             {
@@ -154,21 +147,24 @@ void ProjektConstraintNoPenetration::activateImpulse()
         else
         {
             active = true;
-          /*  for (SubConstraint& sci : subconstraints)
+            for (SubConstraint& sci : subconstraints)
             {
-                if (sci.active)
+                reevalSc(sci);
+                if (sci.inBounds)
                 {
-                    float d = get_distance(sci);
+                    float d = getDistance(sci);
                     if (d > borderZoneWidth)
                     {
                         sci.active = false;
                     }
                     else
                     {
+                        sci.active = true;
                         sci.constraint_error = borderZoneWidth - d;
                     }
+                    //dbgmsg("Subconstraint:\nnormal = {:.2f}, point_of_contact = {:.2f}", sc.normal, pointOfContact(sc));
                 }
-            }*/
+            }
         }
     }
     else
@@ -179,6 +175,8 @@ void ProjektConstraintNoPenetration::activateImpulse()
             for (SubConstraint& sc : subconstraints)
                 sc.active = false;
         }
+
+        intersection.simpstate = GjkSimplex::uninitialized;
     }
 }
 
@@ -189,7 +187,7 @@ float ProjektConstraintNoPenetration::calcImpulse(SubConstraint & sc, float dt)
     {
         if (sc.active)
         {                
-            sc.ln = -(sc.jmat.head<3>() * a.vel + sc.jmat.tail<3>() * b.vel)(0, 0) / (sc.jmat * kmat * sc.jmat.transpose())(0, 0);
+            sc.ln = -((sc.jmat.head<3>() * a.vel + sc.jmat.tail<3>() * b.vel)(0, 0) + beta * sc.constraint_error) / (sc.jmat * kmat * sc.jmat.transpose())(0, 0);
 
             if (sc.acc_ln + sc.ln > 0)
                 sc.ln = -sc.acc_ln;
@@ -218,6 +216,198 @@ void ProjektConstraintNoPenetration::applyImpulse(SubConstraint & sc)
             b.vel += sc.ln * b.kmat * sc.jmat.tail<3>().transpose();
         }
     }
+}
+
+void ProjektConstraintNoPenetration::reevalSc(SubConstraint& sc)
+{
+    if (sc.valid)
+    {
+        Vector2f edge;
+        switch (sc.tf)
+        {
+        case ProjektConstraintNoPenetration::TouchingFeature::avbe:
+            edge = b.pcp.getTransformedVertex(sc.edge[1]) - b.pcp.getTransformedVertex(sc.edge[0]);
+            if (edge.dot(a.pcp.getVertexPos(sc.ver) - b.pcp.getVertexPos(sc.edge[0])) >= 0 &&
+                edge.dot(a.pcp.getVertexPos(sc.ver) - b.pcp.getVertexPos(sc.edge[1])) <= 0)
+            {
+                sc.inBounds = true;
+                sc.normal = b.pcp.getTransformedVertex(sc.edge[1]) - b.pcp.getTransformedVertex(sc.edge[0]);
+                sc.normal = cross(cross(sc.normal, -b.pcp.getTransformedVertex(sc.edge[0])), sc.normal);
+                sc.normal.normalize();
+            }
+            else
+            {
+                sc.inBounds = false;
+                sc.active = false;
+            }
+            break;
+        case ProjektConstraintNoPenetration::TouchingFeature::aebv:
+            edge = a.pcp.getTransformedVertex(sc.edge[1]) - a.pcp.getTransformedVertex(sc.edge[0]);
+            if (edge.dot(b.pcp.getVertexPos(sc.ver) - a.pcp.getVertexPos(sc.edge[0])) >= 0 &&
+                edge.dot(b.pcp.getVertexPos(sc.ver) - a.pcp.getVertexPos(sc.edge[1])) <= 0)
+            {
+                sc.inBounds = true;
+                sc.normal = a.pcp.getTransformedVertex(sc.edge[1]) - a.pcp.getTransformedVertex(sc.edge[0]);
+                sc.normal = cross(cross(sc.normal, a.pcp.getTransformedVertex(sc.edge[0])), sc.normal);
+                sc.normal.normalize();
+            }
+            else
+            {
+                sc.inBounds = false;
+                sc.active = false;
+            }
+            break;
+        }
+    }
+    else
+    {
+        sc.inBounds = false;
+        sc.active = false;
+    }
+}
+
+std::vector<SubConstraint> ProjektConstraintNoPenetration::getNewSubConstraints(const ClosestFeature& cs, const GjkSimplex& _i)
+{
+    enum {edge, vertex} tfa, tfb;
+    std::vector<SubConstraint> newSc;
+    if (cs.feature.size() == 1)
+    {
+        tfa = vertex;
+        tfb = vertex;
+    }
+    else if (cs.feature.size() == 2)
+    {
+        if (_i.simplex_vertices[cs.feature[0].index].index == _i.simplex_vertices[cs.feature[1].index].index)
+            tfa = vertex;
+        else
+            tfa = edge;
+        if (_i.simplex_vertices[cs.feature[0].index + 3].index == _i.simplex_vertices[cs.feature[1].index + 3].index)
+            tfb = vertex;
+        else
+            tfb = edge;
+    }
+
+    if (tfa == vertex && tfb == edge)
+    {
+        SubConstraint sc{ true, true, false };
+        sc.tf = ProjektConstraintNoPenetration::TouchingFeature::avbe;
+        sc.edge[0] = _i.simplex_vertices[cs.feature[0].index + 3].index;
+        sc.edge[1] = _i.simplex_vertices[cs.feature[1].index + 3].index;
+        sc.ver = _i.simplex_vertices[cs.feature[0].index].index;
+        sc.normal = _i.simplex_vertices[cs.feature[0].index + 3] - _i.simplex_vertices[cs.feature[1].index + 3];
+        sc.normal = cross(cross(sc.normal, -b.pcp.getTransformedVertex(_i.simplex_vertices[cs.feature[0].index + 3].index)), sc.normal);
+        sc.normal.normalize();
+        newSc.push_back(sc);
+    }
+    else if (tfa == edge && tfb == vertex)
+    {
+        SubConstraint sc{ true, true, false };
+        sc.tf = ProjektConstraintNoPenetration::TouchingFeature::aebv;
+        sc.edge[0] = _i.simplex_vertices[cs.feature[0].index].index;
+        sc.edge[1] = _i.simplex_vertices[cs.feature[1].index].index;
+        sc.ver = _i.simplex_vertices[cs.feature[0].index + 3].index;
+        sc.normal = _i.simplex_vertices[cs.feature[0].index] - _i.simplex_vertices[cs.feature[1].index];
+        sc.normal = cross(cross(sc.normal, a.pcp.getTransformedVertex(_i.simplex_vertices[cs.feature[0].index].index)), sc.normal);
+        sc.normal.normalize();
+        newSc.push_back(sc);
+    }
+    else if (tfa == vertex && tfb == vertex)
+    {
+        SubConstraint sc{ true, true, false };
+        sc.normal = -cs.feature[0];
+        sc.normal.normalize();
+        float tab[4];
+        Vector2f tmpEdge = a.pcp.getTransformedVertex(_i.simplex_vertices[cs.feature[0].index].index) -
+           a.pcp.getTransformedVertex((_i.simplex_vertices[cs.feature[0].index].index + 1) % a.pcp.vs.size());
+        tab[0] = sc.normal.dot(tmpEdge) / tmpEdge.norm();
+        tmpEdge = a.pcp.getTransformedVertex(_i.simplex_vertices[cs.feature[0].index].index) -
+            a.pcp.getTransformedVertex((_i.simplex_vertices[cs.feature[0].index].index - 1) % a.pcp.vs.size());
+        tab[1] = sc.normal.dot(tmpEdge) / tmpEdge.norm();
+        tmpEdge = b.pcp.getTransformedVertex(_i.simplex_vertices[cs.feature[0].index + 3].index) -
+            b.pcp.getTransformedVertex((_i.simplex_vertices[cs.feature[0].index + 3].index + 1) % b.pcp.vs.size());
+        tab[2] = sc.normal.dot(tmpEdge) / tmpEdge.norm();
+        tmpEdge = b.pcp.getTransformedVertex(_i.simplex_vertices[cs.feature[0].index + 3].index) -
+            b.pcp.getTransformedVertex((_i.simplex_vertices[cs.feature[0].index + 3].index - 1) % b.pcp.vs.size());
+        tab[3] = sc.normal.dot(tmpEdge) / tmpEdge.norm();
+        
+        switch (std::distance(tab, std::min_element(tab, tab + 4)))
+        {
+        case 0:
+            sc.tf = ProjektConstraintNoPenetration::TouchingFeature::aebv;
+            sc.edge[0] = _i.simplex_vertices[cs.feature[0].index].index;
+            sc.edge[1] = (_i.simplex_vertices[cs.feature[0].index].index + 1) % a.pcp.vs.size();
+            sc.ver = _i.simplex_vertices[cs.feature[0].index + 3].index;
+            break;
+        case 1:
+            sc.tf = ProjektConstraintNoPenetration::TouchingFeature::aebv;
+            sc.edge[0] = _i.simplex_vertices[cs.feature[0].index].index;
+            sc.edge[1] = (_i.simplex_vertices[cs.feature[0].index].index - 1) % a.pcp.vs.size();
+            sc.ver = _i.simplex_vertices[cs.feature[0].index + 3].index;
+            break;
+        case 2:
+            sc.tf = ProjektConstraintNoPenetration::TouchingFeature::avbe;
+            sc.edge[0] = _i.simplex_vertices[cs.feature[0].index + 3].index;
+            sc.edge[1] = (_i.simplex_vertices[cs.feature[0].index + 3].index + 1) % b.pcp.vs.size();
+            sc.ver = _i.simplex_vertices[cs.feature[0].index].index;
+            break;
+        case 3:
+            sc.tf = ProjektConstraintNoPenetration::TouchingFeature::avbe;
+            sc.edge[0] = _i.simplex_vertices[cs.feature[0].index + 3].index;
+            sc.edge[1] = (_i.simplex_vertices[cs.feature[0].index + 3].index - 1) % b.pcp.vs.size();
+            sc.ver = _i.simplex_vertices[cs.feature[0].index].index;
+            break;
+        }
+        newSc.push_back(sc);
+    }
+    else if (tfa == edge && tfb == edge)
+    {
+        SubConstraint sc{ true, true, false };
+        Vector2f dir;
+        dir = _i.simplex_vertices[cs.feature[1].index] - _i.simplex_vertices[cs.feature[0].index];
+        sc.normal = cross(cross(dir, a.pcp.getTransformedVertex(_i.simplex_vertices[cs.feature[0].index].index)), dir);
+        sc.normal.normalize();
+        
+        if (dir.dot(_i.simplex_vertices[cs.feature[0].index + 3]) > 0 &&
+            dir.dot(_i.simplex_vertices[cs.feature[0].index + 3]) < 0)
+        {
+            sc.tf = ProjektConstraintNoPenetration::TouchingFeature::aebv;
+            sc.edge[0] = _i.simplex_vertices[cs.feature[0].index].index;
+            sc.edge[1] = _i.simplex_vertices[cs.feature[1].index].index;
+            sc.ver = _i.simplex_vertices[cs.feature[0].index + 3].index;
+            newSc.push_back(sc);
+        }
+        if (dir.dot(_i.simplex_vertices[cs.feature[1].index + 3]) > 0 &&
+            dir.dot(_i.simplex_vertices[cs.feature[1].index + 3]) < 0)
+        {
+            sc.tf = ProjektConstraintNoPenetration::TouchingFeature::aebv;
+            sc.edge[0] = _i.simplex_vertices[cs.feature[0].index].index;
+            sc.edge[1] = _i.simplex_vertices[cs.feature[1].index].index;
+            sc.ver = _i.simplex_vertices[cs.feature[1].index + 3].index;
+            newSc.push_back(sc);
+        }
+        dir = _i.simplex_vertices[cs.feature[1].index + 3] - _i.simplex_vertices[cs.feature[0].index + 3];
+        if (dir.dot(_i.simplex_vertices[cs.feature[0].index]) > 0 &&
+            dir.dot(_i.simplex_vertices[cs.feature[0].index]) < 0)
+        {
+            sc.tf = ProjektConstraintNoPenetration::TouchingFeature::aebv;
+            sc.edge[0] = _i.simplex_vertices[cs.feature[0].index + 3].index;
+            sc.edge[1] = _i.simplex_vertices[cs.feature[1].index + 3].index;
+            sc.ver = _i.simplex_vertices[cs.feature[0].index].index;
+            newSc.push_back(sc);
+        }
+        if (dir.dot(_i.simplex_vertices[cs.feature[1].index]) > 0 &&
+            dir.dot(_i.simplex_vertices[cs.feature[1].index]) < 0)
+        {
+            sc.tf = ProjektConstraintNoPenetration::TouchingFeature::aebv;
+            sc.edge[0] = _i.simplex_vertices[cs.feature[0].index + 3].index;
+            sc.edge[1] = _i.simplex_vertices[cs.feature[1].index + 3].index;
+            sc.ver = _i.simplex_vertices[cs.feature[1].index].index;
+            newSc.push_back(sc);
+        }
+    }
+
+    assert(newSc.size() <= 2);
+    return newSc;
 }
 
 float ProjektConstraintNoPenetration::calcApplyImpulse(float dt)
@@ -273,88 +463,19 @@ float ProjektConstraintNoPenetration::applyAccImpulse()
 bool operator==(const SubConstraint& a,
     const SubConstraint& b)
 {
-    if (a.tfa == b.tfa && a.tfb == b.tfb)
+    if (a.tf == b.tf)
     {
-        if (a.tfa == ProjektConstraintNoPenetration::edge)
+        if (a.edge[0] == b.edge[0] && a.edge[1] == b.edge[1] && a.ver == b.ver)
         {
-            if (a.tfb == ProjektConstraintNoPenetration::edge)
-            {
-                if (a.cpa[0] == b.cpa[0] && a.cpa[1] == b.cpa[1] && a.cpb[0] == b.cpb[0] && a.cpb[1] == b.cpb[1])
-                    return true;
-                else
-                    return false;
-            }
-            else if (a.tfb == ProjektConstraintNoPenetration::vertex)
-            {
-                if (a.cpa[0] == b.cpa[0] && a.cpa[1] == b.cpa[1] && a.cpb[0] == b.cpb[0])
-                    return true;
-                else
-                    return false;
-            }
+            return true;
         }
-        else if(a.tfa == ProjektConstraintNoPenetration::vertex)
+        else
         {
-            if (a.tfb == ProjektConstraintNoPenetration::edge)
-            {
-                if (a.cpa[0] == b.cpa[0] && a.cpb[0] == b.cpb[0] && a.cpb[1] == b.cpb[1])
-                    return true;
-                else
-                    return false;
-            }
-            else if (a.tfb == ProjektConstraintNoPenetration::vertex)
-            {
-                if (a.cpa[0] == b.cpa[0] &&a.cpb[0] == b.cpb[0])
-                    return true;
-                else
-                    return false;
-            }
+            return false;
         }
     }
-    return false;
-}
-
-void ProjektConstraintNoPenetration::SubConstraint::getTf(const GjkSimplex & _i, const ClosestFeature & _cs)
-{    
-    if (_cs.feature.size() == 1)
+    else
     {
-        tfa = TouchingFeature::vertex;
-        tfb = TouchingFeature::vertex;
-        cpa[0] = _i.simplex_vertices[_cs.feature[0].index].index;
-        cpb[0] = _i.simplex_vertices[_cs.feature[0].index + 3].index;
-        normal = _i.simplex_vertices[_cs.feature[0].index + 3] - _i.simplex_vertices[_cs.feature[0].index];
+        return false;
     }
-    else if (_cs.feature.size() == 2)
-    {
-        cpa[0] = _i.simplex_vertices[_cs.feature[0].index].index;
-        cpa[1] = _i.simplex_vertices[_cs.feature[1].index].index;
-        cpb[0] = _i.simplex_vertices[_cs.feature[0].index + 3].index;
-        cpb[1] = _i.simplex_vertices[_cs.feature[1].index + 3].index;
-        if (cpa[0] == cpa[1]) 
-            tfa = TouchingFeature::vertex;
-        else 
-            tfa = TouchingFeature::edge;
-        if (cpb[0] == cpb[1]) 
-            tfb = TouchingFeature::vertex;
-        else 
-            tfb = TouchingFeature::edge;
-            
-        if (tfa == TouchingFeature::edge && tfb == TouchingFeature::vertex)
-        {
-            normal = _i.simplex_vertices[_cs.feature[0].index] - _i.simplex_vertices[_cs.feature[1].index];
-            normal = cross(normal, cross(_i.simplex_vertices[_cs.feature[0].index + 3] - _i.simplex_vertices[_cs.feature[0].index], normal));
-        }
-        else if (tfa == TouchingFeature::vertex && tfb == TouchingFeature::edge)
-        {
-            normal = _i.simplex_vertices[_cs.feature[0].index + 3] - _i.simplex_vertices[_cs.feature[1].index + 3];
-            normal = cross(normal, cross(_i.simplex_vertices[_cs.feature[0].index + 3] - _i.simplex_vertices[_cs.feature[0].index], normal));
-        }
-        else if (tfa == TouchingFeature::edge && tfb == TouchingFeature::edge)
-        {
-            normal = _i.simplex_vertices[_cs.feature[0].index] - _i.simplex_vertices[_cs.feature[1].index];
-            normal = cross(normal, cross(_i.simplex_vertices[_cs.feature[0].index + 3] - _i.simplex_vertices[_cs.feature[0].index], normal));
-        }
-
-    }
-
-    normal.normalize();
 }

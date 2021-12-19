@@ -1,6 +1,6 @@
 #include "ProjektConstraint.h"
 
-bool ProjektConstraint::warm_start = true;
+bool ProjektConstraint::warm_start = false;
 
 ProjektTwoBodyConstraint::ProjektTwoBodyConstraint(ProjektConvexBody& _a, ProjektConvexBody& _b) :
     a(_a), b(_b)

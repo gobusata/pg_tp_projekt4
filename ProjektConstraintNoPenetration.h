@@ -9,8 +9,9 @@ public:
     struct SubConstraint;
     std::vector<SubConstraint> subconstraints;
     GjkSimplex intersection;
+    bool active;
 private:
-    static float friction_coeff, beta, borderZoneWidth;
+    static float friction_coeff, beta, borderZoneWidth, pointWidth;
     bool shapes_in_close_proximity;
     float getDistance(const ProjektConstraintNoPenetration::SubConstraint& sc);
 
@@ -20,22 +21,22 @@ public:
 
     Vector2f pointOfContact(const ProjektConstraintNoPenetration::SubConstraint& sc) const;
 
-    enum TouchingFeature
+    enum class TouchingFeature
     {
-        vertex, edge
+        avbe, aebv
     };
 
     class SubConstraint
     {
     public:
         Vector2f normal{ 0, 0 };
-        bool active{ true };
+        bool active, valid, inBounds;
         float ln{ 0 }, lt{ 0 }, acc_ln{ 0 }, acc_lt{ 0 }, constraint_error{ 0 };
-        int  cpa[2], cpb[2];
-        TouchingFeature tfa, tfb;
+        int  edge[2], ver;
+        TouchingFeature tf;
         Eigen::Matrix<float, 1, 6> jmat;
-        SubConstraint() :
-            constraint_error{ 0 }, active{ false } {}
+        SubConstraint(bool _valid = false, bool _inBounds = false, bool _active = false, float _constraint_error = 0.0f):
+            active{ _active }, valid{ _valid }, inBounds{ _inBounds }, constraint_error{ _constraint_error } {}
         void getTf(const GjkSimplex& _i, const ClosestFeature& _cs);
     };
     
@@ -52,7 +53,17 @@ public:
     float calcImpulse(SubConstraint & sc, float dt);
 
     void applyImpulse(SubConstraint & sc);
+
+private:
+    void reevalSc(SubConstraint& sc);
+
+    std::vector<SubConstraint> getNewSubConstraints(const ClosestFeature& cs, const GjkSimplex& _i);
 };
 
 bool operator==(const ProjektConstraintNoPenetration::SubConstraint& a,
     const ProjektConstraintNoPenetration::SubConstraint& b);
+
+class ProjektConstraintNoPWithFrict : public ProjektConstraintNoPenetration
+{
+
+};
