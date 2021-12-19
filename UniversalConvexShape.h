@@ -25,11 +25,12 @@ class ProjektConvexPolygon
 {
 	Affine2f tm;
 	Vector3f pos;
+	std::vector<Vector2f> gs;
 public:
 	// vertices of the bounding polygon
 	std::vector<Vector2f> vs;
 	ProjektConvexPolygon() : vs() {};
-	ProjektConvexPolygon(const std::vector<Vector2f>& _vs) : vs(_vs) {};
+	ProjektConvexPolygon(const std::vector<Vector2f>& _vs);
 	void setTranslation(const Vector2f& _t);
 	void setRotation(float _r);
 	void setPosition(const Vector3f& _pos);
@@ -39,9 +40,13 @@ public:
 	Vector2f getVertex(int i) const;
 	Vector2f getTransformedVertex(int i) const;
 	Vector2f getVertexPos(int i) const;
+	Vector2f getVertexPos(const Vector2f& v) const;
 	void offsetVertices(Vector2f _v);
 	VectorWithIndex gjkSupportVer(const Vector2f& _dir) const;
 	friend GjkSimplex & gjkSimplex(const ProjektConvexPolygon& a, const ProjektConvexPolygon& b, GjkSimplex & is);
+private:
+	bool dir_lt(const Vector2f& a, const Vector2f& b) const;
+	bool dir_gt(const Vector2f& a, const Vector2f& b) const;
 };
 
 GjkSimplex & gjkSimplex(const ProjektConvexPolygon& a, const ProjektConvexPolygon& b, GjkSimplex & is);
