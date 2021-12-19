@@ -2,10 +2,6 @@
 
 float ProjektConvexBody::gravity = 5e-4;
 
-ProjektConvexPolygon::ProjektConvexPolygon(const std::vector<Vector2f>& _vs) :
-	vs(_vs)
-{}
-
 void ProjektConvexPolygon::setTranslation(const Vector2f& _t)
 {
 	pos.head<2>() = _t;
@@ -63,11 +59,6 @@ Vector2f ProjektConvexPolygon::getVertexPos(int i) const
 	return tm * vs[i];
 }
 
-Vector2f ProjektConvexPolygon::getVertexPos(const Vector2f& v) const
-{
-	return tm * v;
-}
-
 void ProjektConvexPolygon::offsetVertices(Vector2f _v)
 {
 	for (Vector2f& vi : vs) vi += _v;
@@ -79,98 +70,7 @@ VectorWithIndex ProjektConvexPolygon::gjkSupportVer(const Vector2f& dir_) const
 	int index = std::max_element(vs.begin(), vs.end(),
 		[dir](Vector2f a, Vector2f b)->bool {return dir.dot(a) < dir.dot(b); }) - vs.begin();
 	Vector2f ret = *(vs.begin() + index);
-	//return VectorWithIndex(index, Vector2f{ pos(0), pos(1) } + Rotation2Df(pos(2)) * ret);
-	return VectorWithIndex(index, getVertexPos(index));
-}
-
-bool ProjektConvexPolygon::dir_lt(const Vector2f& a, const Vector2f& b) const
-{
-	int aquarter, bquarter;
-	if (a[0] > 0 && a[1] >= 0)
-		aquarter = 1;
-	else if (a[0] <= 0 && a[1] > 0)
-		aquarter = 2;
-	else if (a[0] < 0 && a[1] <= 0)
-		aquarter = 3;
-	else
-		aquarter = 4;
-
-	if (b[0] > 0 && b[1] >= 0)
-		bquarter = 1;
-	else if (b[0] <= 0 && b[1] > 0)
-		bquarter = 2;
-	else if (b[0] < 0 && b[1] <= 0)
-		bquarter = 3;
-	else
-		bquarter = 4;
-
-	if (bquarter > aquarter)
-	{
-		return true;
-	}
-	else if (bquarter < aquarter)
-	{
-		return false;
-	}
-	else
-	{
-		switch (aquarter)
-		{
-		case 1:
-		case 2:
-			return a[0] > b[0];
-		case 3:
-		case 4:
-			return a[0] < b[0];
-		}
-	}
-
-
-	return false;
-}
-
-bool ProjektConvexPolygon::dir_gt(const Vector2f& a, const Vector2f& b) const
-{
-	int aquarter, bquarter;
-	if (a[0] > 0 && a[1] >= 0)
-		aquarter = 1;
-	else if (a[0] <= 0 && a[1] > 0)
-		aquarter = 2;
-	else if (a[0] < 0 && a[1] <= 0)
-		aquarter = 3;
-	else
-		aquarter = 4;
-
-	if (b[0] > 0 && b[1] >= 0)
-		bquarter = 1;
-	else if (b[0] <= 0 && b[1] > 0)
-		bquarter = 2;
-	else if (b[0] < 0 && b[1] <= 0)
-		bquarter = 3;
-	else
-		bquarter = 4;
-
-	if (bquarter > aquarter)
-	{
-		return false;
-	}
-	else if (bquarter < aquarter)
-	{
-		return true;
-	}
-	else
-	{
-		switch (aquarter)
-		{
-		case 1:
-		case 2:
-			return a[0] < b[0];
-		case 3:
-		case 4:
-			return a[0] > b[0];
-		}
-	}
-	return false;
+	return VectorWithIndex(index, Vector2f{ pos(0), pos(1) } + Rotation2Df(pos(2)) * ret);
 }
 
 //Intersection gjkSimplex(const ProjektConvexPolygon& a,
@@ -283,9 +183,7 @@ bool ProjektConvexPolygon::dir_gt(const Vector2f& a, const Vector2f& b) const
 GjkSimplex & gjkSimplex(const ProjektConvexPolygon& a,
 	const ProjektConvexPolygon& b, GjkSimplex & is)
 {
-	Vector2f dir, bc;
-	VectorWithIndex tsv[2];
-	Vector2f ts;
+	Vector2f dir;
 
 	if(is.simpstate != GjkSimplex::uninitialized)
 		is.refresh(a, b);
@@ -315,13 +213,7 @@ GjkSimplex & gjkSimplex(const ProjektConvexPolygon& a,
 		while (true)
 		{
 	case GjkSimplex::line:
-			bc = barycentricCoordinates2({ is.simplex[0], is.simplex[1] }, Vector2f(0, 0));
-			if (bc[0] > 0 && bc[1] > 0)
-				dir = cross(cross(is.simplex[1] - is.simplex[0], -is.simplex[0]), is.simplex[1] - is.simplex[0]);
-			else if (bc[0] <= 0)
-				dir = -is.simplex[1];
-			else
-				dir = -is.simplex[0];
+			dir = cross(cross(is.simplex[1] - is.simplex[0], -is.simplex[0]), is.simplex[1] - is.simplex[0]);
 			is.simplex_vertices[2] = a.gjkSupportVer(dir);
 			is.simplex_vertices[5] = b.gjkSupportVer(-dir);
 			is.simplex[2] = is.simplex_vertices[2] - is.simplex_vertices[5];
@@ -332,32 +224,16 @@ GjkSimplex & gjkSimplex(const ProjektConvexPolygon& a,
 				is.collision = false;
 				return is;
 			}
-			else if (is.simplex_vertices[2].index == is.simplex_vertices[1].index && is.simplex_vertices[5].index == is.simplex_vertices[4].index)
+			if (is.simplex_vertices[2].index == is.simplex_vertices[1].index && is.simplex_vertices[5].index == is.simplex_vertices[4].index)
 			{
 				is.simpstate = GjkSimplex::line;
 				is.collision = false;
 				return is;
 			}
-			else if (abs(cross(is.simplex[0] - is.simplex[2], is.simplex[1] - is.simplex[2])) < 1e-5) //vertices colinear
-			{
-				is.simpstate = GjkSimplex::line;
-				is.collision = false;
-				if (bc[0] <= 0)
-				{
-					is.simplex_vertices[0] = is.simplex_vertices[2];
-					is.simplex_vertices[3] = is.simplex_vertices[5];
-					is.simplex[0] = is.simplex[2];
-				}
-				else if (bc[1] <= 0)
-				{
-					is.simplex_vertices[1] = is.simplex_vertices[2];
-					is.simplex_vertices[4] = is.simplex_vertices[5];
-					is.simplex[1] = is.simplex[2];
-				}
-				return is;
-			}
+
 	case GjkSimplex::triangle:
 			Vector3f coords = barycentricCoordinates3(is.simplex, Vector2f{ 0, 0 });
+
 			if (coords[0] >= 0 && coords[1] >= 0 && coords[2] >= 0)
 			{
 				//compute shortest distance to each edge
@@ -387,9 +263,12 @@ GjkSimplex & gjkSimplex(const ProjektConvexPolygon& a,
 			}
 			else if (coords[0] < 0)
 			{
-				is.simplex[0] = ts;
-				is.simplex_vertices[0] = is.simplex_vertices[2];
-				is.simplex_vertices[3] = is.simplex_vertices[5];
+				is.simplex[0] = is.simplex[1];
+				is.simplex_vertices[0] = is.simplex_vertices[1];
+				is.simplex_vertices[3] = is.simplex_vertices[4];
+				is.simplex[1] = is.simplex[2];
+				is.simplex_vertices[1] = is.simplex_vertices[2];
+				is.simplex_vertices[4] = is.simplex_vertices[5];
 			}
 			else
 			{
@@ -592,7 +471,7 @@ Vector2f barycentricCoordinates2(std::array<Vector2f, 2> line, Vector2f p)
 	float length = n.norm();
 	n.normalize();
 	Vector2f ret(n.dot(p - line[0]) / length, n.dot(line[1] - p) / length);
-	return Vector2f(n.dot(line[1] - p) / length, n.dot(p - line[0]) / length);
+	return ret;
 }
 
 Vector3f barycentricCoordinates3(std::array<Vector2f, 3> tri, Vector2f p)
@@ -664,11 +543,11 @@ ClosestFeature pointToTriangle(std::array<Vector2f, 3> tri, const Vector2f& p)
 ClosestFeature pointToLine(std::array<Vector2f, 2> line, const Vector2f& p)
 {
 	Vector2f u = barycentricCoordinates2(line, p);
-	if (u(0) > 0 && u(1) <= 0)
+	if (u(0) <= 0 && u(1) > 0)
 	{
 		return ClosestFeature{ {VectorWithIndex{0, line[0]}}, (line[0] - p).norm() };
 	}
-	else if (u(1) > 0 && u(0) <= 0)
+	else if (u(1) <= 0 && u(0) > 0)
 	{
 		return ClosestFeature{ {VectorWithIndex{1, line[1]}}, (line[1] - p).norm() };
 	}
