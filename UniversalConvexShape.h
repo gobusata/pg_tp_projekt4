@@ -167,7 +167,9 @@ Vector3f barycentricCoordinates3(std::array<Vector2f, 3> tri, const Vector2f);
 /// <param name="tri">vertices of triangle, for which barycentric coordinates have been computed</param>
 /// <param name="bc">barycnetric coordinates</param>
 /// <returns></returns>
-Vector2f cartesianCoordinates(const std::array<Vector2f, 3> tri, const Vector3f bc);
+Vector2f cartesianCoordinates(const std::array<Vector2f, 3>& tri, const Vector3f& bc);
+
+Vector2f cartesianCoordinates(const std::array<Vector2f, 2>& line, const Vector2f& bc);
 
 float cross(const Vector2f&, const Vector2f&);
 

@@ -614,6 +614,11 @@ Vector2f cartesianCoordinates(const std::array<Vector2f, 3> tri, const Vector3f 
 	return ret;
 }
 
+Vector2f cartesianCoordinates(const std::array<Vector2f, 2>& line, const Vector2f& bc)
+{
+	return line[0] * bc[1] + line[1] * bc[0];
+}
+
 ClosestFeature pointToTriangle(std::array<Vector2f, 3> tri, const Vector2f& p)
 {
 	assert(tri[0] != tri[1] && tri[1] != tri[2] && tri[0] != tri[2]);

@@ -68,13 +68,8 @@ void ProjektConstraintNoPenetration::activateImpulse()
             {
                 active = true;
                 SubConstraint sc;
-                std::vector<SubConstraint> newSc{ getNewSubConstraints(cs, intersection) };
-                for (SubConstraint& sc : newSc)
-                {
-                    sc.active = true;
-                    sc.constraint_error = max(borderZoneWidth - cs.distance, 0);
-                }
-                
+               
+
                 //reevaluate constraints' erros and turn off invalid subconstraints
                 for (SubConstraint& sci : subconstraints)
                 {
@@ -479,3 +474,218 @@ bool operator==(const SubConstraint& a,
         return false;
     }
 }
+
+
+
+
+bool ClippingPlane::operator==(const ClippingPlane& a)
+{
+    if (incE[0].index == a.incE[0].index && incE[1].index == a.incE[1].index &&
+        refE[0].index == a.refE[0].index && refE[1].index == a.refE[1].index)
+        return true;
+    else if (incE[0].index == a.refE[0].index && incE[1].index == a.refE[1].index &&
+        refE[0].index == a.incE[0].index && refE[1].index == a.incE[1].index)
+        return true;
+    else
+        return false;
+}
+
+ClippingPlane::ClippingPlane(const ClosestFeature& cs, const GjkSimplex& _i, 
+    const ProjektConvexPolygon& pcpa, const ProjektConvexPolygon& pcpb)
+{
+    enum { edge, vertex } tfa, tfb;
+    std::vector<SubConstraint> newSc;
+    if (cs.feature.size() == 1)
+    {
+        tfa = vertex;
+        tfb = vertex;
+    }
+    else if (cs.feature.size() == 2)
+    {
+        if (_i.simplex_vertices[cs.feature[0].index].index == _i.simplex_vertices[cs.feature[1].index].index)
+            tfa = vertex;
+        else
+            tfa = edge;
+        if (_i.simplex_vertices[cs.feature[0].index + 3].index == _i.simplex_vertices[cs.feature[1].index + 3].index)
+            tfb = vertex;
+        else
+            tfb = edge;
+    }
+
+    if (tfa == vertex && tfb == edge)
+    {
+        refP = &pcpb;
+        incP = &pcpa;
+        refE[0] = _i.simplex_vertices[cs.feature[0].index + 3];
+        refE[1] = _i.simplex_vertices[cs.feature[1].index + 3];
+        incE[0] = _i.simplex_vertices[cs.feature[0].index];
+        Vector2f e1{ _i.simplex_vertices[cs.feature[0].index] -
+            incP->getVertexPos((_i.simplex_vertices[cs.feature[0].index].index + 1) % incP->vs.size()) },
+            e2{ _i.simplex_vertices[cs.feature[1].index] -
+            incP->getVertexPos((_i.simplex_vertices[cs.feature[0].index].index - 1) % incP->vs.size()) };
+        Vector2f normal{ _i.simplex[cs.feature[0].index] - _i.simplex[cs.feature[1].index] };
+        normal = cross(cross(normal, -cs.feature[0]), normal);
+        float v1 = normal.dot(e1), v2 = normal.dot(e2);
+        if (v1 < v2)
+        {
+            incE[0] = _i.simplex_vertices[cs.feature[0].index];
+            int ind = (_i.simplex_vertices[cs.feature[0].index].index + 1) % incP->vs.size();
+            incE[1] = VectorWithIndex(incP->getVertexPos(ind), ind);
+        }
+        else
+        {
+            int ind = (_i.simplex_vertices[cs.feature[0].index].index + 1) % incP->vs.size();
+            incE[0] = VectorWithIndex(incP->getVertexPos(ind), ind);
+            incE[1] = _i.simplex_vertices[cs.feature[0].index];
+        }
+        
+        if ((refE[0].index + 1) % refP->vs.size() != refE[1].index)
+            std::swap(refE[0], refE[1]);
+    }
+    else if (tfa == edge && tfb == vertex)
+    {
+        refP = &pcpa;
+        incP = &pcpb;
+        refE[0] = _i.simplex_vertices[cs.feature[0].index];
+        refE[1] = _i.simplex_vertices[cs.feature[1].index];
+        Vector2f e1{ _i.simplex_vertices[cs.feature[0].index] -
+          incP->getVertexPos((_i.simplex_vertices[cs.feature[0].index + 3].index + 1) % incP->vs.size()) },
+            e2{ _i.simplex_vertices[cs.feature[1].index] -
+            incP->getVertexPos((_i.simplex_vertices[cs.feature[0].index + 3].index - 1) % incP->vs.size()) };
+        Vector2f normal{ _i.simplex[cs.feature[0].index] - _i.simplex[cs.feature[1].index] };
+        normal = cross(cross(normal, -cs.feature[0]), normal);
+        float v1 = normal.dot(e1), v2 = normal.dot(e2);
+        if (v1 < v2)
+        {
+            incE[0] = _i.simplex_vertices[cs.feature[0].index];
+            int ind = (_i.simplex_vertices[cs.feature[0].index + 3].index + 1) % incP->vs.size();
+            incE[1] = VectorWithIndex(incP->getVertexPos(ind), ind);
+        }
+        else
+        {
+            int ind = (_i.simplex_vertices[cs.feature[0].index + 3].index + 1) % incP->vs.size();
+            incE[0] = VectorWithIndex(incP->getVertexPos(ind), ind);
+            incE[1] = _i.simplex_vertices[cs.feature[0].index];
+        }
+        if ( (refE[0].index + 1) % refP->vs.size() != refE[1].index)
+            std::swap(refE[0], refE[1]);
+    }
+    else if (tfa == vertex && tfb == vertex)
+    {
+        Vector2f normal = -cs.feature[0];
+        Vector2f e1{ _i.simplex_vertices[cs.feature[0].index] - pcpa.getVertexPos((_i.simplex_vertices[cs.feature[0].index].index + 1) % pcpa.vs.size()) },
+                e2{ _i.simplex_vertices[cs.feature[0].index] - pcpa.getVertexPos((_i.simplex_vertices[cs.feature[0].index].index - 1) % pcpa.vs.size()) },
+                e3{ _i.simplex_vertices[cs.feature[0].index + 3] - pcpb.getVertexPos((_i.simplex_vertices[cs.feature[0].index + 3].index + 1) % pcpb.vs.size()) },
+                e4{ _i.simplex_vertices[cs.feature[0].index + 3] - pcpb.getVertexPos((_i.simplex_vertices[cs.feature[0].index + 3].index - 1) % pcpb.vs.size()) };
+        
+        float v1 = normal.dot(e1), v2 = normal.dot(e2), v3 = normal.dot(e3), v4 = normal.dot(e4);
+        bool b1 = v1 < v2, b2 = v3 < v4, b3 = min(v1, v2) < min(v3, v4);
+        if (b3)
+        {
+            refP = &pcpa;
+            incP = &pcpb;
+            if (b1)
+            {
+                int ind = (_i.simplex_vertices[cs.feature[0].index].index + 1) % refP->vs.size();
+                refE[0] = _i.simplex_vertices[cs.feature[0].index];
+                refE[1] = VectorWithIndex(refP->getVertexPos(ind), ind);
+            }
+            else
+            {
+                int ind = (_i.simplex_vertices[cs.feature[0].index].index - 1) % refP->vs.size();
+                refE[0] = VectorWithIndex(refP->getVertexPos(ind), ind);
+                refE[1] = _i.simplex_vertices[cs.feature[0].index];
+            }
+
+            if (b2)
+            {
+                int ind = (_i.simplex_vertices[cs.feature[0].index + 3].index + 1) % incP->vs.size();
+                incE[0] = _i.simplex_vertices[cs.feature[0].index + 3];
+                incE[1] = VectorWithIndex(incP->getVertexPos(ind), ind);
+            }
+            else
+            {
+                int ind = (_i.simplex_vertices[cs.feature[0].index + 3].index - 1) % incP->vs.size();
+                incE[0] = VectorWithIndex(incP->getVertexPos(ind), ind);
+                incE[1] = _i.simplex_vertices[cs.feature[0].index + 3];
+            }
+        }
+        else
+        {
+            refP = &pcpb;
+            incP = &pcpa;
+            if (b2)
+            {
+                int ind = (_i.simplex_vertices[cs.feature[0].index + 3].index + 1) % refP->vs.size();
+                refE[0] = _i.simplex_vertices[cs.feature[0].index + 3];
+                refE[1] = VectorWithIndex(refP->getVertexPos(ind), ind);
+            }
+            else
+            {
+                int ind = (_i.simplex_vertices[cs.feature[0].index + 3].index - 1) % refP->vs.size();
+                refE[0] = VectorWithIndex(refP->getVertexPos(ind), ind);
+                refE[1] = _i.simplex_vertices[cs.feature[0].index + 3];
+            }
+
+            if (b1)
+            {
+                int ind = (_i.simplex_vertices[cs.feature[0].index].index + 1) % incP->vs.size();
+                incE[0] = _i.simplex_vertices[cs.feature[0].index];
+                incE[1] = VectorWithIndex(incP->getVertexPos(ind), ind);
+            }
+            else
+            {
+                int ind = (_i.simplex_vertices[cs.feature[0].index].index - 1) % incP->vs.size();
+                incE[0] = VectorWithIndex(incP->getVertexPos(ind), ind);
+                incE[1] = _i.simplex_vertices[cs.feature[0].index];
+            }
+        }
+
+    }
+    else if (tfa == edge && tfb == edge)
+    {
+        refE[0] = _i.simplex_vertices[cs.feature[0].index + 3];
+        refE[1] = _i.simplex_vertices[cs.feature[1].index + 3];
+        incE[0] = _i.simplex_vertices[cs.feature[0].index];
+        incE[1] = _i.simplex_vertices[cs.feature[1].index];
+        if ((refE[0].index + 1) % refP->vs.size() != refE[1].index)
+            std::swap(refE[0], refE[1]);
+        if ((incE[0].index + 1) % incP->vs.size() != incE[1].index)
+            std::swap(incE[0], incE[1]);
+    }
+    return ;
+}
+
+ClippingPlane::PointsAndPenetrations ClippingPlane::getPointsAndPenetrations()
+{
+    Vector2f dir = refE[1] - refE[0];
+    Vector2f normal = dir;
+    normal = cross(cross(normal, refE[0]), normal);
+    normal.normalize();
+    dir.normalize();
+    float v1 = dir.dot(incE[0]), v2 = dir.dot(incE[1]), v3 = dir.dot(refE[0]), v4 = dir.dot(refE[1]);
+    float w1 = normal.dot(incE[0]), w2 = normal.dot(incE[1]);
+    PointAndPenetration pap1, pap2;
+    bool b1 = v1 <= v3, b2 = v1 <= v4, b3 = v2 <= v3, b4 = v2 <= v4;
+    if (!b1 && b2)
+        pap1 = {incE[0], normal.dot(incE[0])};
+    else if (b1 && !b3)
+    {
+        Vector2f tmp = 
+    }
+    else if (b2 && !b4)
+        pap1 = {};
+    if (!b3 && b4)
+        pap2 = {};
+    else if (!b1 && b3)
+        pap2 = {};
+    else if (!b2 & b4)
+        pap2 = {};
+  
+    
+   
+
+    
+}
+
+
