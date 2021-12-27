@@ -475,9 +475,6 @@ bool operator==(const SubConstraint& a,
     }
 }
 
-
-
-
 bool ClippingPlane::operator==(const ClippingPlane& a)
 {
     if (incE[0].index == a.incE[0].index && incE[1].index == a.incE[1].index &&
@@ -663,29 +660,61 @@ ClippingPlane::PointsAndPenetrations ClippingPlane::getPointsAndPenetrations()
     normal = cross(cross(normal, refE[0]), normal);
     normal.normalize();
     dir.normalize();
-    float v1 = dir.dot(incE[0]), v2 = dir.dot(incE[1]), v3 = dir.dot(refE[0]), v4 = dir.dot(refE[1]);
+    std::array<std::pair<uint8_t, float>, 4> tab{
+        std::make_pair(0, dir.dot(incE[0])), std::make_pair(1, dir.dot(incE[1])),
+        std::make_pair(2, dir.dot(refE[0])), std::make_pair(3, dir.dot(refE[1]))
+    };
     float w1 = normal.dot(incE[0]), w2 = normal.dot(incE[1]);
-    PointAndPenetration pap1, pap2;
-    bool b1 = v1 <= v3, b2 = v1 <= v4, b3 = v2 <= v3, b4 = v2 <= v4;
-    if (!b1 && b2)
-        pap1 = {incE[0], normal.dot(incE[0])};
-    else if (b1 && !b3)
+    std::sort(tab.begin(), tab.end(), [](auto a, auto b)->bool {return a.second() < b.second(); });
+    PointsAndPenetrations paps;
+    if (!(tab[0].first == 2 && tab[1].first == 3) && !(tab[2].first == 2 && tab[3].first == 3))
     {
-        Vector2f tmp = 
-    }
-    else if (b2 && !b4)
-        pap1 = {};
-    if (!b3 && b4)
-        pap2 = {};
-    else if (!b1 && b3)
-        pap2 = {};
-    else if (!b2 & b4)
-        pap2 = {};
-  
-    
-   
+        switch (tab[1].first)
+        {
+        case 0:
+            paps.paps[0] = PointAndPenetration{ static_cast<Vector2f>(incE[0]), normal.dot(incE[0]) };
+            break;
+        case 1:
+            paps.paps[0] = PointAndPenetration{ static_cast<Vector2f>(incE[1]), normal.dot(incE[1]) };
+            break;
+        case 2:
+            paps.paps[0].point = cartesianCoordinates({ incE[0], incE[1] },
+                Vector2f((tab[2].second - tab[0].second) / (tab[1].second - tab[0].second),
+                    (tab[1].second - tab[2].second) / (tab[1].second - tab[0].second)));
+            break;
+        case 3:
+            paps.paps[0].point = cartesianCoordinates({ incE[0], incE[1] },
+                Vector2f((tab[3].second - tab[0].second) / (tab[1].second - tab[0].second),
+                    (tab[1].second - tab[3].second) / (tab[1].second - tab[0].second)));
+            break;
+        }
 
-    
+        switch (tab[2].first)
+        {
+        case 0:
+            paps.paps[1] = { incE[0], normal.dot(incE[0]) };
+            break;
+        case 1:
+            paps.paps[1] = { incE[1], normal.dot(incE[1]) };
+            break;
+        case 2:
+            paps.paps[1].point = cartesianCoordinates({ incE[0], incE[1] },
+                Vector2f((tab[2].second - tab[0].second) / (tab[1].second - tab[0].second),
+                    (tab[1].second - tab[2].second) / (tab[1].second - tab[0].second)));
+            break;
+        case 3:
+            paps.paps[1].point = cartesianCoordinates({ incE[0], incE[1] },
+                Vector2f((tab[3].second - tab[0].second) / (tab[1].second - tab[0].second),
+                    (tab[1].second - tab[3].second) / (tab[1].second - tab[0].second)));
+            break;
+        }
+        paps.on = true;
+    }
+    else
+    {
+        paps.on = false;
+    }
+    return paps;
 }
 
 

@@ -1,6 +1,7 @@
 #pragma once
 #include <stdexcept>
 #include <optional>
+#include <functional>
 #include "ProjektConstraint.h"
 #include "UniversalConvexShape.h"
 
@@ -75,7 +76,10 @@ public:
     bool operator==(const ClippingPlane& cp);
 
     typedef struct { Vector2f point; float penetration; } PointAndPenetration;
-    typedef std::optional < std::array<PointAndPenetration, 2> > PointsAndPenetrations;
+    typedef  struct { 
+        std::array<PointAndPenetration, 2> paps; 
+        bool on;
+        } PointsAndPenetrations;
 
     PointsAndPenetrations getPointsAndPenetrations();
 
