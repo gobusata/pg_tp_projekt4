@@ -14,10 +14,12 @@ public:
     std::vector<SubConstraint> subconstraints;
     GjkSimplex intersection;
     bool active;
+    ClippingPlane clippingPlane;
 private:
     static float friction_coeff, beta, borderZoneWidth, pointWidth;
     bool shapes_in_close_proximity;
     float getDistance(const ProjektConstraintNoPenetration::SubConstraint& sc);
+    
 
 public:
 
@@ -28,13 +30,13 @@ public:
     class SubConstraint
     {
     public:
-        Vector2f normal{ 0, 0 };
-        bool active, valid, inBounds;
-        float ln{ 0 }, lt{ 0 }, acc_ln{ 0 }, acc_lt{ 0 }, constraint_error{ 0 };
+        Vector2f normal{ 0, 0 }, pointOfContact;
+        float ln{ 0 }, lt{ 0 }, acc_ln{ 0 }, acc_lt{ 0 }, constraint_error{ 0 }, distance{ 0 };
         Eigen::Matrix<float, 1, 6> jmat;
-        SubConstraint(bool _valid = false, bool _inBounds = false, bool _active = false, float _constraint_error = 0.0f):
-            active{ _active }, valid{ _valid }, inBounds{ _inBounds }, constraint_error{ _constraint_error } {}
-        void getTf(const GjkSimplex& _i, const ClosestFeature& _cs);
+        SubConstraint(Vector2f _pointOfContact, float _distance = 0.0f, float _constraint_error = 0.0f):
+            pointOfContact(_pointOfContact), distance(_distance), constraint_error{ _constraint_error } {}
+        Vector2f getPointOfContact() { return pointOfContact; };
+        float getDistance() { return distance; };
     };
     
     bool eq(const ProjektConstraintNoPenetration::SubConstraint& a, const ProjektConstraintNoPenetration::SubConstraint& b);
@@ -75,11 +77,11 @@ public:
 
     bool operator==(const ClippingPlane& cp);
 
-    typedef struct { Vector2f point; float penetration; } PointAndPenetration;
-    typedef  struct { 
+    struct PointAndPenetration{ Vector2f point; float penetration; };
+    struct PointsAndPenetrations {
         std::array<PointAndPenetration, 2> paps; 
         bool on;
-        } PointsAndPenetrations;
+        };
 
     PointsAndPenetrations getPointsAndPenetrations();
 
