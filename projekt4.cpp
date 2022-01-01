@@ -14,7 +14,6 @@ using namespace Gdiplus;
 
 #include "framework.h"
 #include "projekt4.h"
-#include "Triangle.h"
 #include "Robot.h"
 #include "ProjektLogs.h"
 #include "ProjektConstraint.h"
@@ -132,33 +131,42 @@ public:
 
         for (std::shared_ptr<const ProjektConstraintNoPenetration>  con : noPenetrationConstraints)
         {
-            switch (con->intersection.simpstate)
+            //switch (con->intersection.simpstate)
+            //{
+            //case GjkSimplex::line:
+            //    graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[0]), ev2gp(con->intersection.simplex_vertices[1]));
+            //    graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[3]), ev2gp(con->intersection.simplex_vertices[4]));
+            //    break;
+            //case GjkSimplex::triangle:
+            //    graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[0]), ev2gp(con->intersection.simplex_vertices[1]));
+            //    graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[1]), ev2gp(con->intersection.simplex_vertices[2]));
+            //    graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[2]), ev2gp(con->intersection.simplex_vertices[0]));
+            //    graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[3]), ev2gp(con->intersection.simplex_vertices[4]));
+            //    graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[4]), ev2gp(con->intersection.simplex_vertices[5]));
+            //    graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[5]), ev2gp(con->intersection.simplex_vertices[3]));
+            //    break;
+            //}
+            if (con->active)
             {
-            case GjkSimplex::line:
-                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[0]), ev2gp(con->intersection.simplex_vertices[1]));
-                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[3]), ev2gp(con->intersection.simplex_vertices[4]));
-                break;
-            case GjkSimplex::triangle:
-                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[0]), ev2gp(con->intersection.simplex_vertices[1]));
-                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[1]), ev2gp(con->intersection.simplex_vertices[2]));
-                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[2]), ev2gp(con->intersection.simplex_vertices[0]));
-                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[3]), ev2gp(con->intersection.simplex_vertices[4]));
-                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[4]), ev2gp(con->intersection.simplex_vertices[5]));
-                graphics->DrawLine(&blackPen, ev2gp(con->intersection.simplex_vertices[5]), ev2gp(con->intersection.simplex_vertices[3]));
-                break;
-            }
-            for (const ProjektConstraintNoPenetration::SubConstraint& sc : con->subconstraints)
-            {
-                if (sc.active)
+                for (const ProjektConstraintNoPenetration::SubConstraint& sc : con->subconstraints)
                 {
-                    Vector2f tmp{ con->pointOfContact(sc) };
-                    graphics->FillEllipse(&this->redBrush, (REAL)tmp[0] - 1.5, (REAL)tmp[1] - 1.5, (REAL)3., (REAL)3.);
+                    if (sc.active)
+                    {
+                        Vector2f tmp{ sc.getPointOfContact() };
+                        //graphics->FillEllipse(&this->redBrush, (REAL)tmp[0] - 1.5, (REAL)tmp[1] - 1.5, (REAL)3., (REAL)3.);
+                       
+                    }
                 }
-                else if (sc.valid)
-                {
-                    Vector2f tmp{ con->pointOfContact(sc) };
-                    graphics->FillEllipse(&this->greenBrush, (REAL)tmp[0] - 1.5, (REAL)tmp[1] - 1.5, (REAL)3., (REAL)3.);
-                }
+                graphics->DrawLine(&this->redPen, (REAL)con->clippingPlane.incE[0][0], (REAL)con->clippingPlane.incE[0][1],
+                    (REAL)con->clippingPlane.refE[0][0], (REAL)con->clippingPlane.refE[0][1]);
+                graphics->DrawLine(&this->redPen, (REAL)con->clippingPlane.incE[1][0], (REAL)con->clippingPlane.incE[1][1],
+                    (REAL)con->clippingPlane.refE[1][0], (REAL)con->clippingPlane.refE[1][1]);
+                graphics->DrawLine(&this->redPen, (REAL)con->clippingPlane.incE[0][0], (REAL)con->clippingPlane.incE[0][1],
+                    (REAL)con->clippingPlane.incE[1][0], (REAL)con->clippingPlane.incE[1][1]);
+                graphics->DrawLine(&this->redPen, (REAL)con->clippingPlane.refE[1][0], (REAL)con->clippingPlane.refE[1][1],
+                    (REAL)con->clippingPlane.refE[0][0], (REAL)con->clippingPlane.refE[0][1]);
+
+
             }
         }
 
@@ -254,27 +262,51 @@ public:
 
     }
 
+    //void demo2()
+    //{
+    //    shapes.clear();
+    //    constraints.clear();
+    //    planeConstraints.clear();
+    //    noPenetrationConstraints.clear();
+    //    pause_simulation = false;
+    //    gravity.Y = ProjektConvexBody::gravity;
+    //    shapes.push_back(ProjektConvexBody(Vector3f(50, ar.GetBottom() - 200, 0), Vector3f(0, 0, 0),
+    //        { Vector2f(40, -40), Vector2f(-40, -40), Vector2f(-40, 40), Vector2f(40, 40) }, 1, 1));
+    //    shapes.push_back(ProjektConvexBody(Vector3f(150, ar.GetBottom() - 200, 0), Vector3f(0, 0, 0e-3),
+    //        { Vector2f(40, -40), Vector2f(-40, -40), Vector2f(-40, 40), Vector2f(2, 43), Vector2f(40, 40) }, 1, 1));
+    //    for (auto& shape : shapes)
+    //    {
+    //        std::shared_ptr<ProjektConstraintPlane> tmp = 
+    //            std::make_shared<ProjektConstraintPlane>(shape, Vector2f( 0, 1 ), Vector2f( 0, ar.GetBottom() ));
+    //        constraints.push_back(tmp);
+    //        planeConstraints.push_back(tmp);
+    //    }
+    //}
+
     void demo2()
     {
         shapes.clear();
         constraints.clear();
         planeConstraints.clear();
         noPenetrationConstraints.clear();
-        pause_simulation = false;
         gravity.Y = ProjektConvexBody::gravity;
-        shapes.push_back(ProjektConvexBody(Vector3f(50, ar.GetBottom() - 200, 0), Vector3f(0, 0, 0),
-            { Vector2f(40, -40), Vector2f(-40, -40), Vector2f(-40, 40), Vector2f(40, 40) }, 1, 1));
-        shapes.push_back(ProjektConvexBody(Vector3f(150, ar.GetBottom() - 200, 0), Vector3f(0, 0, 0e-3),
-            { Vector2f(40, -40), Vector2f(-40, -40), Vector2f(-40, 40), Vector2f(2, 43), Vector2f(40, 40) }, 1, 1));
-        for (auto& shape : shapes)
+        shapes.push_back(ProjektConvexBody(Vector3f(200, ar.GetBottom() - 51, 0), Vector3f(0, 0, 0),
+            { Vector2f(0, 40), Vector2f(40, 0), Vector2f(0, -40), Vector2f(-40, 0) }, 1, 1));
+        shapes.push_back(ProjektConvexBody(Vector3f(200, ar.GetBottom() - 150, 0.0), Vector3f(0, 0, 0),
+            { Vector2f(0, 40), Vector2f(40, 0), Vector2f(0, -40), Vector2f(-40, 0)}, 1, 1));
+        for (std::vector<ProjektConvexBody>::iterator pcb1 = shapes.begin(); pcb1 != shapes.end(); pcb1++)
         {
-            std::shared_ptr<ProjektConstraintPlane> tmp = 
-                std::make_shared<ProjektConstraintPlane>(shape, Vector2f( 0, 1 ), Vector2f( 0, ar.GetBottom() ));
-            constraints.push_back(tmp);
-            planeConstraints.push_back(tmp);
+            constraints.push_back(std::make_shared<ProjektConstraintPlane>(*pcb1, Vector2f{ 0.f , 1.f }, Vector2f{ 0.5 * (ar.GetLeft() + ar.GetRight()), ar.GetBottom() }));
+            planeConstraints.push_back(std::reinterpret_pointer_cast<ProjektConstraintPlane>(constraints.back()));
+            for (auto pcb2 = pcb1 + 1; pcb2 != shapes.end(); pcb2++)
+            {
+                std::shared_ptr<ProjektConstraintNoPenetration> pcnp = std::make_shared<ProjektConstraintNoPenetration>(*pcb1, *pcb2);
+                constraints.push_back(pcnp);
+                noPenetrationConstraints.push_back(pcnp);
+            }
         }
     }
-
+    
     void demo3()
     {
         shapes.clear();
@@ -306,12 +338,13 @@ public:
         planeConstraints.clear();
         noPenetrationConstraints.clear();
         gravity.Y = ProjektConvexBody::gravity;
-        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 50, 0 }, Vector3f{ 0, 0, 0 },
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 43, 0 }, Vector3f{ 0, 0, 0 },
             std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
-        shapes.push_back(ProjektConvexBody(Vector3f{ 120, ar.GetBottom() - 144, 0.05 }, Vector3f{ 0, 0, 0 },
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 126, 0 }, Vector3f{ 0, 0, 0 },
             std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
-        //shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 248, 0 }, Vector3f{ 0, 0, 0 },
-        //    std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
+        shapes.push_back(ProjektConvexBody(Vector3f{ 100, ar.GetBottom() - 209, 0 }, Vector3f{ 0, 0, 0 },
+            std::vector<Vector2f>({ Vector2f{ 40, 40 }, Vector2f{ -40, 40 }, Vector2f{ -40, -40 }, Vector2f{ 40, -40 } }), 1.f, 1.f));
+
         for (std::vector<ProjektConvexBody>::iterator pcb1 = shapes.begin(); pcb1 != shapes.end(); pcb1++)
         {
             constraints.push_back(std::make_shared<ProjektConstraintPlane>(*pcb1, Vector2f{ 0.f , 1.f }, Vector2f{ 0.5 * (ar.GetLeft() + ar.GetRight()), ar.GetBottom() }));
@@ -359,14 +392,6 @@ public:
     {
         if (is_robot)
         {
-            if (robot->catched_triangle == nullptr)
-            {
-
-            }
-            else
-            {
-                robot->catched_triangle = nullptr;
-            }
            
         }
     }

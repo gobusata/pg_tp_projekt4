@@ -317,11 +317,34 @@ GjkSimplex & gjkSimplex(const ProjektConvexPolygon& a,
 	case GjkSimplex::line:
 			bc = barycentricCoordinates2({ is.simplex[0], is.simplex[1] }, Vector2f(0, 0));
 			if (bc[0] > 0 && bc[1] > 0)
+			{
 				dir = cross(cross(is.simplex[1] - is.simplex[0], -is.simplex[0]), is.simplex[1] - is.simplex[0]);
-			else if (bc[0] <= 0)
+				if (dir.norm() == 0)
+				{
+					is.simpstate = GjkSimplex::line;
+					is.collision = true;
+					return is;
+				}
+			}
+			else if (bc[0] < 0)
 				dir = -is.simplex[1];
-			else
+			else if (bc[1] < 0)
 				dir = -is.simplex[0];
+			else if (bc[1] == 0)
+			{
+				is.simpstate = GjkSimplex::point;
+				is.collision = true;
+				return is;
+			}
+			else if (bc[0] == 0)
+			{
+				std::swap(is.simplex[0], is.simplex[1]);
+				std::swap(is.simplex_vertices[0], is.simplex_vertices[1]);
+				std::swap(is.simplex_vertices[3], is.simplex_vertices[4]);
+				is.simpstate = GjkSimplex::point;
+				is.collision = true;
+				return is;
+			}
 			is.simplex_vertices[2] = a.gjkSupportVer(dir);
 			is.simplex_vertices[5] = b.gjkSupportVer(-dir);
 			is.simplex[2] = is.simplex_vertices[2] - is.simplex_vertices[5];

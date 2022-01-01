@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <Eigen/dense>
 #include <Eigen/geometry>
-#include <gsl/gsl_linalg.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include "ProjektLogs.h"
@@ -77,6 +76,11 @@ public:
 	VectorWithIndex() = default;
 	VectorWithIndex(int a, Vector2f b) : index{ a }, Vector2f{ b } {};
 	VectorWithIndex(Vector2f a, int b) : index{ b }, Vector2f{ a } {};
+	VectorWithIndex& operator=(const Vector2f& v) 
+	{
+		*static_cast<Vector2f*>(this) = v;
+		return *this;
+	}
 };
 
 struct ClosestFeature

@@ -5,8 +5,9 @@
 #include <cmath>
 #include <Eigen/dense>
 #include <vector>
+#include <concepts>
+#include <type_traits>
 
-#include "Triangle.h"
 
 
 using namespace Gdiplus;
@@ -16,6 +17,19 @@ inline REAL abs(const PointF& v)
 {
 	return std::sqrt(v.X * v.X + v.Y * v.Y);
 }
+
+template <typename T>
+typename std::enable_if<std::is_floating_point<T>::value, Gdiplus::PointF>::type operator*(const T a, const Gdiplus::PointF& b) 
+{
+	return Gdiplus::PointF(a * b.X, a * b.Y);
+}
+
+template <typename T> 
+std::enable_if_t<std::is_floating_point<T>::value, Gdiplus::PointF> operator*(const Gdiplus::PointF& a, const T b) 
+{
+	return Gdiplus::PointF(b * a.X, b * a.Y); 
+}
+
 
 enum RobotCommand
 {
@@ -46,15 +60,12 @@ public:
 	void follow_trajectory();
 
 public:
-	Triangle* catched_triangle = nullptr;
 	PointF catched_triangle_r;
 	REAL arm1_length, arm2_length;
 
 	Robot(REAL arm1_length_ = 300, REAL arm2_length_ = 300, REAL angle1_deg_ = 90, REAL angle2_deg_ = 0);
 
 	void draw(Graphics* graphics);
-
-	void catch_triangle(Triangle* tri);
 
 	void update(REAL dt);
 

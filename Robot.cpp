@@ -20,25 +20,8 @@ Robot::Robot(REAL arm1_length_, REAL arm2_length_, REAL angle1_deg_, REAL angle2
 void Robot::draw(Graphics* graphics)
 {
 	graphics->DrawLine(&pen1, base_pos, base_pos + arm1);
-	graphics->DrawLine(&pen1, base_pos + PointF(0, 20), base_pos + arm1 + arm2*0.05);
+	graphics->DrawLine(&pen1, base_pos + PointF(0, 20), base_pos + arm1 + 0.05 * arm2);
 	graphics->DrawLine(&pen2, base_pos + arm1, base_pos + arm1 + arm2);
-}
-
-void Robot::catch_triangle(Triangle* tri)
-{
-	if (catched_triangle == nullptr)
-	{
-		if (Triangle::is_point_int_triangle(tri, base_pos + arm1 + arm2))
-		{
-			catched_triangle = tri;
-			catched_triangle_r = base_pos + arm1 + arm2 - tri->pos;
-		}
-		else
-		{
-			catched_triangle = nullptr;
-		}
-	}
-
 }
 
 void Robot::update(REAL dt)
@@ -71,11 +54,6 @@ void Robot::update(REAL dt)
 		this->follow_trajectory();
 	}
 
-
-	if (catched_triangle != nullptr)
-	{
-		catched_triangle->vel = (base_pos + arm1 + arm2 - catched_triangle->pos) * 10e-3;
-	}
 }
 
 void Robot::set_arms(REAL angle1, REAL angle2)
